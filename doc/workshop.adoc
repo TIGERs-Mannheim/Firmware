@@ -1,0 +1,492 @@
+:toc:
+
+= Embedded Coding Workshop
+
+== Project structure
+
+This project contains code for TIGERs robots generation v2016 and v2019 and for the base station v2018.
+
+Hardware maps to Eclipse projects as follows:
+
+* Robot v2019: main2019, motor2019, ir2019
+* Robot v2016: main2016
+* Base station v2018: bs2018
+
+v2019 robots have two sub-processor types. One for the front infrared barrier and array, contained in ir2019 project 
+and one for each motor controller, contained in motor2019.
+
+A brief overview of the folder structure under Firmware:
+
+* app: application code
+** bs2018: base station v2018
+** ir2019: infrared barrier and array of v2019 robots
+** main2016: main processor code v2016 robots
+** main2019: main processor code v2019 robots
+** motor2019: individual motor controller code v2019 robots
+* lib: shared code, used by multiple applications
+** common: shared code written by TIGERs
+*** src/chibios: ChibiOS operating system files, used by v2016, v2019, bs2018
+*** src/f0xx: STM32F0 shared code
+*** src/f4xx: STM32F4 shared code
+*** src/f7xx: STM32F7 shared code
+*** src/fatfs: Elm Chan's FAT file system library
+*** src/gui: shared GUI elements
+*** src/h7xx: STM32H7 shared code
+*** src/main: *Primary robot control code*
+*** src/ugfx: uGFX graphics library used for touch screens
+*** src/util: Utility functions, algorithms, drivers
+** dsp: external CMSIS DSP library, contains optimized matrix operations
+* bin: binary utility files for Windows
+* doc: documentation folder
+* docker: automated build pipeline configuration
+* launch: Eclipse launch files for flashing and debugging
+* make: Makefile magic
+* openocd: OpenOCD configuration files
+* protoc: ProtoBuf files used by base station
+* scripts: utility scripts
+** logAnalyzer: MATLAB logfile analyzer for low-level control analysis
+ 
+
+== Coding style
+
+* `small_file_names.h` and `small_file_names.c`
+* Global functions use `CamelCase()`
+* Global function names start with file name: `SmallFileNamesExample()`
+* Local functions begin with a small first letter: `camelCase()`
+* Local functions are *always* static
+* Structs use `CamelCase`
+* Global structs match file name: `SmallFileNames`
+* I.e. only one global struct is allowed per file, use sub-structs if needed
+* Variables use `camelCase`
+* Pointers are pre-fixed with a 'p': `void* pIAmAPointer`
+* `#define ALL_UPPER_CASE 42`
+* Use fixed-size types, i.e. `int32_t`, *not* `int`
+* Use english language for all structs, variables, comments, and functions
+* Braces are always on next line:
++
+```C
+void MyFunction()
+{
+}
+```
++
+* Braces may be omitted for simple single-line blocks
++
+```C
+if(42)
+  printQuestion();
+``` 
++
+* Use tab to indent
+
+== Task 1 - Talk to me
+
+Your first task will familiarize you with the robot's command line interface.
+
+=== Connect
+Open a terminal program of your choice to connect to the robot's serial port.
+PuTTy is a good choice for Linux and Windows.
+Under Linux use e.g. ttyUSB0 to connect.
+Under Windows use e.g. COM1 to connect.
+Actual ports to use can also vary slightly.
+Connection settings are a baudrate of 921600, 8 data bits, 1 stop bit, no parity (8N1).
+
+=== First command
+Type `version` at the open terminal window and hit enter.
+If everything works, the robot will greet you with its firmware version number.
+
+=== Add a new command
+* Open the `cli.c` file for your robot (main2016/src/cli.c).   
+* Scroll down to the `processCommand()` function
+* Add your own command there with
++
+[source,C,linenums]
+----
+if(ConsoleCmpCmd("explode"))
+{
+  ConsolePrint("BUMM!\r\n");
+}
+----
++
+
+You have just met another important function, `ConsolePrint`.
+It outputs data on the console interface. Note that you manually have to add carriage return ('\r') and new line ('\n').
+
+Now select in the top menu Run => Run Configurations.. => Flash MB 2016 (Run) and click on Run.
+Alternatively, select the little arrow next the the green button with the play triangle and select the run configuration.
+This will automatically trigger a build and flash the code to the robot.
+
+Now enter `explode` into the console window see what happens.
+
+=== Parse command arguments
+Add another command:
+[source,C,linenums]
+----
+int16_t i16;
+if(ConsoleScanCmd("pin %hd", &i16) == 1)
+{
+  ConsolePrint("You entered PIN: %hd\r\n", i16);
+}
+----
+
+If you want to input parameters a simple command compare is not enough.
+You have to use ConsoleScanCmd which uses scanf style input. Note two things:
+
+* The variable placeholder is 'hd', for a 'half'-sized (i.e. 16bit) datatype which is signed ('d').
+  Be extremely careful to select the correct placeholder for your argument type of things may go really wrong.
+* `ConsoleScanCmd` returns a value which is equal to the number of parsed variables.
+  Always make sure to check the return value for the number of variables you expect.
+  
+TIP: Use `ConsoleScanCmd` and `ConsoleCmpCmd` only in cli.c. It does not work anywhere else!
+
+WARNING: `ConsolePrint` requires a large thread stack and is extremely slow. Do not use for high-frequency output.
+
+== Task 2 - Understand bot skills
+Sorry, this chapter is a bit theoretic but super duper important!
+
+=== Bot skill structure
+Each skill has:
+
+* An input structure. This is the data input for the skill from Sumatra.
+  This input structure is also present in Sumatra (check moduli-botmanager).
+* A `SkillInstance` global variable
+* A `run` function, executed at 1000Hz.
+* Optionally an init and exit function, called once upon starting or stopping the skill.
+
+Go to `lib/common/src/main` and have a look at `skill_sine.h` and `skill_sine.c` for a good and simple example.
+Go through the code and try to locate the above mentioned points. Can you find out what this skill does?
+
+=== Input data
+A bot skill has access to various input sources to perform its task. Have a look at the follwing diagram: 
+[ditaa]
+----
+Sumatra Data +------+
+                    |
+Sensors +-------+   |
+                |   |
+                v   v
+            +---+-------+
+State +---->+ Bot Skill +--->Skill Output+--->Control Algorithm
+            +--+-----+--+        +                   +
+               ^     ^           |                   |
+               |     |           |                   |
+               |     +-----------+                   |
+               |        delay                        |
+               |                                     |
+               +-------------------------------------+
+                        Trajectory Data
+----
+Data sources are:
+
+* Sumatra Data: As mentioned before, this is skill-dependant data from Sumatra
+* Sensors: Contains data from all sensors the robot can access (e.g. encoders, gyros, vision, battery, motors, IR barrier).
+* State: Current robot state (position, velocity, acceleration) combined by the robot's sensor fusion.
+* Skill Output: The last output from the previous run of the skill is available as input.
+* Trajectory Data: This contains the planned 'path' the robot intents to take, with setpoints for position, velocity and acceleration.
+
+You can check the `SkillInput` structure and its members for details.
+
+=== Output data
+The skill output contains:
+
+* Input data for the drive system. 
+  This can be a position, local velocity, force, or motor velocities together with their limits.
+  The control algorithm will take care of going from A to B while respecting limits as good as possible.
+  A bot skill does not need to worry about control theory (too much).
+* Desired dribbler speed and mode. Can be a controlled velocity or an open-loop voltage.
+* Kicker control data. Allows to arm/disarm the kicker, select the kick device and kick speed.
+
+== Task 3 - Add a new bot skill
+We will now add a new bot skill to the robot. 
+Bot skills are very basic functions which extend what the robot can actually do.
+They are executed within the robots primary control task, so you can really mess things up here.
+
+=== Groundwork
+Create files `skill_keeper.h` and `skill_keeper.c` in `lib/common/src/main`.
+The following code will not do much yet. 
+As soon as the skill is started the robot will turn slowly counter-clockwise, stop the dribbler, and disarm the kicker.
+
+`skill_keeper.h`:
+[source,C,linenums]
+----
+#pragma once
+
+#include <main/skills.h>
+
+typedef struct PACKED _SkillKeeperInput
+{
+	int16_t ballPos[2]; // [mm]
+	int16_t ballVel[2]; // [mm/s]
+
+	uint8_t penAreaDepth; // [cm]
+	uint8_t goalWidth; // [cm]
+	int16_t goalOffset; // [mm]
+
+	uint8_t velMaxXY;
+	uint8_t velMaxW;
+	uint8_t accMaxXY;
+	uint8_t accMaxW;
+} SkillKeeperInput;
+
+extern SkillInstance skillKeeper;
+----
+
+`skill_keeper.c`:
+[source,C,linenums]
+----
+#include <main/skill_keeper.h>
+#include <main/skill_basics.h>
+
+static void keeperRun(const SkillInput* pInput, SkillOutput* pOutput);
+
+SkillInstance skillKeeper = { 0, &keeperRun, 0 };
+
+static void keeperRun(const SkillInput* pInput, SkillOutput* pOutput)
+{
+	SkillKeeperInput* pKeeper = (SkillKeeperInput*)pInput->pData;
+
+	// Drive system data
+	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
+	pOutput->drive.modeW = DRIVE_MODE_LOCAL_VEL;
+
+	pOutput->drive.localVel[0] = 0;
+	pOutput->drive.localVel[1] = 0;
+	pOutput->drive.localVel[2] = 0.5f; // [rad/s]
+
+	// Movement limits
+	if(pKeeper->velMaxXY == 0)
+		pKeeper->velMaxXY = 1;
+
+	if(pKeeper->velMaxW == 0)
+		pKeeper->velMaxW = 1;
+
+	if(pKeeper->accMaxXY == 0)
+		pKeeper->accMaxXY = 1;
+
+	if(pKeeper->accMaxW == 0)
+		pKeeper->accMaxW = 1;
+
+	pOutput->drive.limits.velMaxXY = ((float)pKeeper->velMaxXY)*(GLOBAL_POS_MAX_VEL_XY/255.0f);
+	pOutput->drive.limits.velMaxW = ((float)pKeeper->velMaxW)*(GLOBAL_POS_MAX_VEL_W/255.0f);
+	pOutput->drive.limits.accMaxXY = ((float)pKeeper->accMaxXY)*(GLOBAL_POS_MAX_ACC_XY/255.0f);
+	pOutput->drive.limits.accMaxW = ((float)pKeeper->accMaxW)*(GLOBAL_POS_MAX_ACC_W/255.0f);
+	pOutput->drive.limits.jerkMaxXY = LOCAL_VEL_MAX_JERK_XY;
+	pOutput->drive.limits.jerkMaxW = LOCAL_VEL_MAX_JERK_W;
+	pOutput->drive.limits.strictVelLimit = 0;
+
+	// Dribbler motor stays off
+	pOutput->dribbler.mode = DRIBBLER_MODE_OFF;
+
+	// Kicker is disarmed
+	pOutput->kicker.mode = KICKER_MODE_DISARM;
+}
+----
+
+IMPORTANT: Make sure to always set outputs for drive system, kicker, and dribbler. 
+Otherwise the robot may still use data from the skill which executed before.
+
+=== Announce new bot skill
+So your bot skill exists now but it is not yet known to the robot's skill system.
+
+* Open the `skills.c` file.
+* At top add: `#include <main/skill_keeper.h>`
+* Extend the list of `skillInstances` with an entry for the keeper:
++
+[source,C,linenums]
+----
+SkillInstanceId skillInstances[] = {
+	{   0, &skillEmergency },
+	{   1, &skillWheelVel },
+	{   2, &skillLocalVel },
+	{   3, &skillGlobalVel },
+	{   4, &skillGlobalPos },
+	{   5, &skillGlobalVelAndOrient },
+	{   6, &skillSine },
+	{   7, &skillFastPos.instance },
+	{   8, &skillCircleBall },
+	{   9, &skillPenaltyShoot },
+	{  10, &skillLocalForce },
+	{  11, &skillKeeper }
+};
+----
+
+The new skill has skill ID 11. The ID has to match with the corresponding bot skill class in Sumatra.
+
+Now compile and flash the new code onto your robot.
+
+TIP: When desk-testing with a robot please make sure to place something under it, so that the wheels are in the air.
+If your robot plays havoc due to some bug it can't go anywhere this way.
+
+=== Start new botskill
+WARNING: Depending on your last Sumatra state, the robot may automatically charge its capacitors to a high voltage.
+If the red capacitor light is on please press F6 in Sumatra to auto-discharge.
+
+We will now  start your new skill for the first time.
+Open Sumatra and connect to your base station. 
+Make sure your base station is on a distinct channel and your robot is connected to it.
+ 
+To start the new skill:
+
+* Open the Skills view
+* Choose your robot in the upper drop-down list
+* In the rightmost drop-down list select KEEPER
+* Click on Create below all the parameter boxes
+
+Your robot shall now start to turn slowly, because it executes the newly created skill. 
+If not, please call for assistance.
+
+=== Sumatra backend
+For this workshop, the bot skill counterpart in Sumatra has already been created for you.
+Just search for `BotSkillKeeper` to see how it looks like in Sumatra to create the bot skill input structure.
+Keep in mind that this counterpart in Sumatra is not created or updated automatically.
+If you change something on the skill input structure in the Firmware, you must adapt it in Sumatra as well.
+
+== Task 4 - Use skill input data
+We will now modify the keeper skill to become more keeper-like.
+We let it drive to the center of the goal and look at the ball.
+
+=== Code
+Modify `skill_keeper.c`:
+[source,C,linenums]
+----
+	SkillKeeperInput* pKeeper = (SkillKeeperInput*)pInput->pData;
+
+	// convert to float and SI units
+	float ballPos[2] = { pKeeper->ballPos[0] * 0.001f, pKeeper->ballPos[1] * 0.001f };
+
+	// compute angle to look at ball
+	float botToBall[2];
+	botToBall[0] = ballPos[0] - pInput->pState->pos[0];
+	botToBall[1] = ballPos[1] - pInput->pState->pos[1];
+
+	float lookAtBallAngle = arm_atan2_f32(botToBall[1], botToBall[0]);
+
+	// Use global position mode
+	pOutput->drive.modeXY = DRIVE_MODE_GLOBAL_POS;
+	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
+
+	// Drive to goal center and look at ball
+	pOutput->drive.pos[0] = pKeeper->goalOffset * 0.001f;
+	pOutput->drive.pos[1] = 0.0f;
+	pOutput->drive.pos[2] = lookAtBallAngle;
+
+	// Movement limits
+	// ...
+----
+
+At top, add:
+[source,C,linenums]
+----
+#include "util/arm_mat_util_f32.h"
+----
+
+=== Explanation
+So what are we doing here? We changed quite something.
+
+. We make use of the ball position we get from Sumatra. It is converted from [mm] to SI units [m] in line 4.
+  It happens very often that skill input data has strange (sometimes even very strange) units to make best
+  use of the avalable bits in the skill data. 
+. On lines 7 - 11 we compute an angle to look at the ball.
+  Note that we do not used simple `atan2f` function. Instead we use `arm_atan2_f32`.
+  This version is not very precise because it uses an interpolated look-up table but it is much faster than a standard `atan2f`.
+  On the robot even these little details count!
+. On lines 14 & 15 we now switched to use global position mode instead of local velocity.
+. Lines 18 - 20 set the actual target position and orientation.
+
+=== Test it
+TIP: You need to be at the field now with a working and connected SSL Vision.
+
+WARNING: When testing at the field please have a person near the field ready to sprint and catch the robot
+in case something goes wrong. Furthermore, if your robot freaks out, hit ESC immediately on the computer running Sumatra.
+This will trigger an emergency stop on all robots.
+
+. Place your robot on the field and start Sumatra, go to the Skills view again.
+. Select `KEEPER` again in the rightmost drop-down list.
+. Set a ballPos of 0,0 mm
+. Set a goalOffset of 1000 mm
+. Set maxVel to 1 m/s
+. Set maxAcc to 2 m/s^2
+. Click create
+
+The robot should now drive to 1000,0. 
+That's our simulated goal position and look at 0,0 because we told him the ball would be there.
+
+Check different positions for goalOffset and ballPos and check if everything works as expected.
+
+=== Test it more
+So far, we have manually entered data about the ball and goal position. 
+This is not very effective for a real game.
+Luckily, somebody (guess who, part of his name is a refrigerating drink!) already created a skill in Sumatra which:
+
+* Drives to our penalty area with active pathplanning
+* Activates the `KEEPER` bot skill as soon as the robot is in the penalty area and stands still
+* Permanently updates the ball position and velocity in the bot skill
+* Uses goal position data from the SSL Vision geometry
+* Employs movement limits from the Bot Params in Sumatra
+
+To use this awesome skill, stay in the Skills View but now use the drop-down next to the colorful crosshair (a.k.a. Ultra-Panel).
+There is also an entry called just `KEEPER`. Select it and click Create.
+
+The robot should now move to our goal, stay at its center and always look at the real ball, even when you move it!
+
+== Task 5 - Make it a real keeper
+So far, our keeper would happily watch the ball go past him into the goal. That is not very keeper-like :(
+
+This section will not contain any more code, now it's up to you!
+But you will get some tips.
+
+=== Intercept ball travel line
+A first approach should intercept the ball at the intersection of the ball's travel direction and the goal line.
+
+. Use goalWidth to compute where the goal line is. Watch out, it is in [cm].
+. Use ballPos and ballVel to compute the ball's travel line.
+  Only do that if the ball has a certain minimum velocity. Otherwise the ballVel direction will jump heavily.
+  This is reality, not a perfect simulation!
+. Refresh your school math knowledge of how to compute a line-line intersection.
+. Let the robot drive to the interception point
+. Watch out, the robot has a diameter of 18cm! Do not send it positions too close to the goal posts.
+. It would actually be better if the robot is not on the goal line, but in front of it. Adjust its X position by 9cm.
+
+=== Adjust action space
+Having the robot always near the goal line gives it maximum time to react until a ball is there.
+Unfortunately, in this configuration also most of the goal is not covered.
+If the keeper would drive out of the goal towards the ball it would greatly increase the area it covers.
+
+. Find out how to compute the position where the keeper most efficiently covers the goal
+. Make sure the keeper does not leave the area span by the goalWidth and penAreaDepth.
+  If the robot leaves this area the Sumatra keeper skill will abort the keeper bot skill and let the robot drive back into the penalty area.
+. Watch out for corner cases: the ball might actually be behind the goal line or even the goal.
+
+== Task 6 - Fire at will!
+If you still cannot get enough of writing embedded keeper code you may now try to use the dribbler and kicker.
+You could enable the dribbler when receiving the ball to minimize the chance that it bounces back off.
+
+You may also arm the straight or chip kicker while receiving to initiate immediate return fire in case you catch the ball.
+Watch out in which direction you are kicking!
+
+You may also stop the ball first, and then try to kick it to a different location.
+
+== Task 7 - Technical challenge
+In this challenge, your keeper will be tested by a real Sumatra attacker.
+The attacker will shoot at the goal from different locations on the field.
+
+You will receive points based on the following metric:
+
+|===
+|Action | Points
+
+|Touch ball
+|+1
+
+|Prevent goal
+|+1
+
+|Stop ball in penalty area
+|+1
+
+|Clear ball from penalty area by kicking
+|+2
+
+|Redirect ball into opponent goal
+|+5
+|===

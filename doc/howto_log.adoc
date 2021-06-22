@@ -1,0 +1,204 @@
+:toc:
+
+= Firmware Logging Methods
+
+There are three methods available to log data on the robot. Each method has very distinct use cases. Here is an overview:
+
+|===
+|Method | Speed | Domain | Storage | Complexity | Persistent | Features
+
+| Log
+| Insanely fast
+| Everywhere
+| RAM
+| Very low
+| No
+| almost none
+
+| Console
+| Very slow
+| cli.c*
+| Terminal
+| Low
+| No
+| basically printf
+
+| SD Card
+| Good
+| Tasks
+| SD Card
+| High
+| Yes
+| a lot
+
+|===
+
+== Log
+
+The Log method offers only a very limited set of functionality. 
+It is designed as an internal super fast logging method which can be used everywhere.
+It has no limitations where it can be called. That also means it is the only method that is allowed to be called from interrupts.
+
+It's primary use case is to log severe faults, mostly related to hardware malfunctions or for timing analysis during development.
+
+To use this method `#include <util/log.h>` in your file. 
+
+There are four levels of severity: Debug, Info, Warn, and Error. Debug and Info messages are only recorded in Firmware debug build configurations.
+
+For each severity level two functions exist. One takes only a message as argument, the other one takes one additional `uint32_t` parameter.
+
+The definitions for error level look like:
+
+* `void LogError(const char* pMsg)`
+* `void LogErrorC(const char* pMsg, uint32_t code)`
+
+Note that you can only pass static text (known at compile time) to this function. Dynamically created text (e.g. from snprintf) cannot be used.
+Furthermore, only a uint32_t is available as additional storage. This is usually enough to output data from a single variable or register. 
+Smaller values (e.g. two uint16_t) might be put into a single uint32_t by bit shifting.
+
+Messages are stored in RAM. For each level, the last 128 messages are stored. If more log entries appear the oldest ones are overwritten.
+
+The messages can be viewed in the terminal on demand. The command is `log 10`. This would show the last 10 entries of each severity level.
+You can adjust the number to your needs. The command will output the source file location where each log was emitted, together with a timestamp,
+the message text itself, the code value, and a repitition counter. If the same messages is received multiple times with the same code, 
+no new message is stored but the repitition counter of the last message is simply increased and the timestamp updated.
+  
+== Console
+The Console method is connected to the terminal as output. It offers printf-like functionality, which makes this function very versatile.
+
+The call is `ConsolePrint("format string", parameterrs..)` and works exactly like printf (in fact, it uses snprintf under the hood).
+
+This method is extremely slow, probably over a millisecond per output. Furthermore, data storage is the terminal. That also means that this data
+is lost if no terminal is open.
+The terminal subsystem has limited buffering capabilities. If you output too much data at once with repeated ConsolePrint calls the buffer
+can fill up and data is lost. In such cases a thread sleep may be required to give the terminal time to output all buffered characters.
+
+ConsolePrint should only be called from within the cli.c file. And it should only be called on demand. Do not program periodic output via ConsolePrint. This will clutter the terminal and make it hard to use (you no longer see what you type).
+
+Technically, ConsolePrint can be called from within any task which has a sufficiently large stack (4096 bytes minimum, 8192B recommended).
+This may be useful for development purposes, e.g. a poor man's data logging functionality. Nevertheless, such things will not be accepted on the
+master branch.
+
+=== Network
+Analog to ConsolePrint, there is a `NetworkPrint(..)` method. It works the same from a development perspective, also the same limits apply, and some more!
+
+Text used in NetworkPrint is transmitted from the Bot to the Base Station and from there to Sumatra. It appears in the Console view in the Bot Center.
+
+This method has an even lower bandwidth and buffering capability as ConsolePrint. Furthermore, it can saturate the wireless link, leading to dropped packets. This can have severe impact on our game performance. Be very careful where you use this function.
+
+== SD Card
+The SD Card on the robot is used for high-bandwidth persistent data storage. It is the perfect method to record real-time data and perform post analysis. It is extensively used by the robot's sensor fusion and control. Furthermore, it may also be used for detailed BotSkill analysis.
+Data view and analysis required Matlab.
+
+The SD Card logging is the most complex log option, and it requires quite some work to setup capture of new data.
+
+TIP: SD Card logging may be unstable on v2019 robots if they are only powered via USB. Please use a battery or external power supply to provide enough power.
+
+=== Message Definition
+
+==== Struct
+All messages which will ever be written to the SD card are defined in `lib/common/src/log_msgs.h`. Furthermore, they all have a basic structure:
+
+[source,C,linenums]
+----
+typedef struct PACKED _LogSomething
+{
+	LogEntryHeader header;
+	
+	int32_t myData[3];
+	float moreData;
+} LogSomething;
+----
+
+Note the following:
+
+ * the `PACKED` attribute is required
+ * the `LogEntryHeader` must be the first item
+ * All data types must be 4 byte in size (int32_t, uint32_t, float)
+ * Using a typedef is recommended, note the struct name and typedef name similarity.
+
+==== Unique ID
+Each message needs a unique identifier. These identifiers are listed in `lib/common/src/struct_ids.h`. Struct IDs below 0x0100 are reserved for configs. IDs over 0x8000 are used internally and also reserved.
+
+The message ID should be named after the message struct. For the above case that would be `SID_SOMETHING`.
+
+==== Description
+After a log message struct has been defined, it must be described. This description is saved along the messages on the SD card. This allows to dynamically add new messages in the Firmware without post-processing tools need to be adapted. They just parse the description to process messages.
+
+Descriptions are defined in `lib/common/src/log_msgs.c`. There is one constant variable `logMessageDescriptions` which needs to be extended. Note that this is a fixed size array, the number of elements is written explicitly and you need to increase the number for each message you add.
+
+Adding the description of the above struct would look like:
+
+[source,C,linenums]
+----
+{ SID_SOMETHING, "something", 4, (ElementDesc[]) {
+	{ INT32,	"my_data_x", "ft", "Distance to something X" },
+	{ INT32,	"my_data_y", "ft", "Distance to something Y" },
+	{ INT32,	"my_data_y", "ft", "Distance to something Z" },
+	{ FLOAT,	"more_data", "cm^2", "Area of this something" },
+}, },
+----
+
+Line 1 starts the description and begins with the newly defined structure ID. Then follows a short name (no whitespaces!). Then the number of elements. Then starts the description of each element.
+Lines 2-5 describe each item with: data type, short name (no whitespaces!), unit, description (white spaces allowed).
+
+Note that although myData is an array, it is necessary to list each element of the array individually. Also note, that the header element is never described.
+
+=== Logging 
+
+==== Prepare Object
+Now that we have a LogSomething struct, instantiate it somewhere and initialize it properly:
+[source,C,linenums]
+----
+	LogSomething something;
+	
+	memset(&something, 0, sizeof(something));
+
+	something.header.type = SID_SOMETHING;
+	something.header.length = sizeof(LogSomething);
+----
+
+Setting it to zero at the beginning is a recommended best practice, especially for objects on the stack. Afterwards, the header is updated with the correct struct ID and size of the struct. This may look redundant at this place but is required for further processing where data is passed as void pointer, which does not carry size information.
+
+==== Write it
+Final step is to actually log the message.
+
+[source,C,linenums]
+----
+	something.header.timestamp = SysTimeUSec();
+	
+	something.myData[0] = 42;
+	// fill other fields here...
+	
+	LogFileWrite(&something);
+	// or RobotImplWriteLogMsg(&something);
+----
+
+First the timestamp of the message is set. It makes most sense to always use `SysTimeUSec()` here. Then the data of the message itself is filled.
+
+Then two options exist for really writing the message:
+
+ * Use `LogFileWrite` when you are at code located in a specific microcontroller project (e.g. main2016, main2019, bs2018).
+ * Use `RobotImplWriteLogMsg` when you are at common code in lib/common/src/main (e.g. BotSkills).
+
+=== Logfile
+The logfile appears on the SD card with filename logXX.dat, where XX is an increasing number. For each boot of the robot a new log is created.
+The SD card can be inserted at any time, a restart is not required. The SD Card must be FAT32 formatted.
+
+To properly close a log file:
+
+ * use the `stoplog` command on the terminal or
+ * use the "Close Logfile" button on the display in the Logging submenu or
+ * turn off the robot via the power button
+
+You can start a new log manually with:
+
+ * the `startlog` command on the terminal or
+ * the `logfile <custom_file_name.dat>` command if you want to use a specific logfile name
+
+==== Loading Logs (Matlab)
+Start your Matlab and have a look at the `scripts/logAnalyzer` folder. It contains a loadLogFile.cpp file. Type `mex loadLogFile.cpp` in your Matlab command window to compile this file. The log file loading is written in C++ for performance reasons. Note that you need to have a MEX supported compiler installed in your system. For more details visit https://de.mathworks.com/support/requirements/supported-compilers.html[Supported Compilers]. You only need to "Matlab" column to be supported.
+
+Now you can load your logfile with `log = loadLogFile('log0.dat')` in the command window. Have a look at the log variable afterwards in Matlab. It contains all the logged data, nicely arranged as sub-structs with the names you gave in the message description. You may now process the data according to your needs with Matlab (e.g. post-process, plot, ...).
+
+You may also open the LogFileViewer.m script and start it. It allows you to select a logfile via a GUI and has many many useful plots already built-in for your daily tuning session.
