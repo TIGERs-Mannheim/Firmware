@@ -5,7 +5,7 @@ function [ skill ] = processSkillData( logData, sampleTimes )
 numSamples = length(sampleTimes);
 [skill.drive.pos.global, skill.drive.vel.local] = procSetpoints();
 [skill.drive.modeXY, skill.drive.modeW] = procMode();
-[skill.dribbler.speed, skill.dribbler.voltage, skill.dribbler.mode] = procDribbler();
+[skill.dribbler.speed, skill.dribbler.maxCurrent, skill.dribbler.voltage, skill.dribbler.mode] = procDribbler();
 [skill.kicker.mode, skill.kicker.device, skill.kicker.speed] = procKicker();
 
 function tCor = timeRolloverComp(tIn)
@@ -55,18 +55,19 @@ function [modeXY, modeW] = procMode()
     modeW(:,1) = interp1(ctrlModeData(:,1), ctrlModeData(:,3), sampleTimes);
 end
 
-function [speed, voltage, mode] = procDribbler()
+function [speed, maxCurrent, voltage, mode] = procDribbler()
     firstCol = find(strcmp(logData.skill_output.names, 'dribbler_speed'));
     
-    dribData = logData.skill_output.data(:,[1 firstCol:firstCol+2]);
+    dribData = logData.skill_output.data(:,[1 firstCol:firstCol+3]);
 
     dribData(:,1) = timeRolloverComp(dribData(:,1));
     [~, ia] = unique(dribData(:,1));
     dribData = dribData(ia, :);	% delete duplicates
 
     speed = interp1(dribData(:,1), dribData(:,2), sampleTimes);
-    voltage = interp1(dribData(:,1), dribData(:,3), sampleTimes);
-    mode = interp1(dribData(:,1), dribData(:,4), sampleTimes);
+    maxCurrent = interp1(dribData(:,1), dribData(:,3), sampleTimes);
+    voltage = interp1(dribData(:,1), dribData(:,4), sampleTimes);
+    mode = interp1(dribData(:,1), dribData(:,5), sampleTimes);
 end
 
 function [mode, device, speed] = procKicker()

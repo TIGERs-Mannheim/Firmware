@@ -790,38 +790,33 @@ end
 function showDribbler(~, ~)
     sp1 = subplot(2, 2, 1);
 	plot(sampleTimes, skill.dribbler.speed, 'g--', ...
-        sampleTimes, in.dribbler.speed, 'b-');
-	legend('Ref', 'Real');
-	title('Dribbler Voltage');
+        sampleTimes, in.dribbler.speed, 'b-', ...
+        sampleTimes, in.dribbler.auxSpeed, 'r-', ...
+        sampleTimes, state.drib.vel, 'k-');
+	legend('Ref', 'Hall', 'Model', 'State');
+	title('Dribbler Speed');
 	xlabel('t [s]');
-	ylabel('v [RPM]');
+	ylabel('v [rad/s]');
 	axis tight
     grid on
     grid minor
-	ylim([-5000 20000]);
+	ylim([-500 2500]);
     
 	sp2 = subplot(2, 2, 2);
-	plot(sampleTimes, in.barrier.on, 'g-', ...
-        sampleTimes, in.barrier.off, 'r-', ...
-        sampleTimes, in.barrier.irq, 'k--');
-    legend('On', 'Off', 'Interrupted');
-	title('Barrier');
+	plot(sampleTimes, in.dribbler.temp, 'b-');
+	title('Dribbler Temperature');
 	xlabel('t [s]');
-	ylabel('U [V]');
+	ylabel('T [°C]');
 	axis tight
     grid on
     grid minor
-	ylim([-0.1 2.0]);
-    
-	d = designfilt('lowpassfir','FilterOrder', 10, ...
-               'CutoffFrequency', 100, 'SampleRate', 1000);
-    
-    filtCur = filter(d, in.dribbler.current);
+	ylim([0 100.0]);
     
     sp3 = subplot(2, 2, 3);
 	plot(sampleTimes, in.dribbler.current, 'b-', ...
-        sampleTimes, filtCur, 'r-');
-	legend('Real');
+        sampleTimes, state.drib.cur, 'k-', ...
+        sampleTimes, skill.dribbler.maxCurrent, 'r-');
+	legend('Real', 'State', 'Limit');
 	title('Dribbler Current');
 	xlabel('t [s]');
 	ylabel('I [A]');
@@ -830,6 +825,14 @@ function showDribbler(~, ~)
     grid minor
     
 	sp4 = subplot(2, 2, 4);
+	plot(sampleTimes, in.dribbler.voltage, 'b-');
+	legend('Output');
+	title('Dribbler Voltage');
+	xlabel('t [s]');
+	ylabel('U [V]');
+	axis tight
+    grid on
+    grid minor
     
     linkaxes([sp1, sp2, sp3, sp4], 'x');
 end

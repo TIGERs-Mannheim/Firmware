@@ -61,11 +61,12 @@ numSamples = length(sampleTimes);
 [out.mot.vol] = procMotorVol();
 [out.mot.cur] = procMotorCurOut();
 [in.mot.cur] = procMotorCur();
-[state.pos.global, state.vel.global, state.acc.global, state.pos.local, state.vel.local, state.acc.local, state.vel.localAcc] = procState();
+[state.pos.global, state.vel.global, state.acc.global, state.pos.local, state.vel.local, state.acc.local, state.vel.localAcc, ...
+    state.drib.vel, state.drib.cur] = procState();
 [in.bat.vol, in.bat.cur] = procBat();
 [in.kicker.vol, in.kicker.cur, in.kicker.cnt, in.kicker.flags] = procKicker();
 [in.barrier.on, in.barrier.off, in.barrier.irq] = procBarrier();
-[in.dribbler.speed, in.dribbler.voltage, in.dribbler.temp, in.dribbler.current] = procDribbler();
+[in.dribbler.speed, in.dribbler.auxSpeed, in.dribbler.voltage, in.dribbler.temp, in.dribbler.current] = procDribbler();
 
 function tCor = timeRolloverComp(tIn)
     cor = cumsum([0; diff(tIn) < -2147483648])*4294967296;
@@ -119,17 +120,22 @@ function [ vol, cur ] = procBat()
     cur(:,1) = interp1(batData(:,1), batData(:,3), sampleTimes);
 end
 
-function [posGlobal, velGlobal, accGlobal, posLocal, velLocal, accLocal, accVelLocal] = procState()
+function [posGlobal, velGlobal, accGlobal, posLocal, velLocal, accLocal, accVelLocal, dribVel, dribCur] = procState()
     time = logData.ctrl_state.data(:,1);
     posData = logData.ctrl_state.data(:,2:4);
     velData = logData.ctrl_state.data(:,5:7);
     accData = logData.ctrl_state.data(:,8:10);
+    dribData = logData.ctrl_state.data(:,15:16);
     
     [~, ia] = unique(time);	% find unqiue entries
     time = time(ia, :);
     posData = posData(ia, :);	% delete duplicates
     velData = velData(ia, :);	% delete duplicates
     accData = accData(ia, :);	% delete duplicates
+    dribData = dribData(ia, :);
+
+    dribVel = interp1(time, dribData(:, 1), sampleTimes);
+    dribCur = interp1(time, dribData(:, 2), sampleTimes);
 
     velLocalData = velData;
     accLocalData = accData;
@@ -511,10 +517,10 @@ function [vOn, vOff, interrupted] = procBarrier()
     interrupted = interp1(irData(:,1), irData(:,4), sampleTimes);
 end
 
-function [speed, voltage, temp, current] = procDribbler()
-    firstCol = find(strcmp(logData.sensors.names, 'dribbler_speed'));
+function [speed, auxSpeed, voltage, temp, current] = procDribbler()
+    firstCol = find(strcmp(logData.sensors.names, 'dribbler_hall_speed'));
     
-    dribData = logData.sensors.data(:,[1 firstCol:firstCol+4]);
+    dribData = logData.sensors.data(:,[1 firstCol:firstCol+6]);
     
     dribData(:,1) = timeRolloverComp(dribData(:,1));
 
@@ -522,14 +528,10 @@ function [speed, voltage, temp, current] = procDribbler()
     dribData = dribData(ia, :);	% delete duplicates
 
     speed = interp1(dribData(:,1), dribData(:,2), sampleTimes);
-    temp = interp1(dribData(:,1), dribData(:,3), sampleTimes);
-    voltage = interp1(dribData(:,1), dribData(:,4), sampleTimes);
-    
-    if any(strcmp(logData.sensors.names, 'dribbler_current'))
-        current = interp1(dribData(:,1), dribData(:,5), sampleTimes);
-    else
-        current = zeros(numSamples, 1);
-    end
+    auxSpeed = interp1(dribData(:,1), dribData(:,3), sampleTimes);
+    temp = interp1(dribData(:,1), dribData(:,4), sampleTimes);
+    voltage = interp1(dribData(:,1), dribData(:,5), sampleTimes);
+    current = interp1(dribData(:,1), dribData(:,6), sampleTimes);
     
 end
 

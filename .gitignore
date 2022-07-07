@@ -1,10 +1,7 @@
-user.mk
-release/
-debug/
-lib/lib*.a
 .settings/language.settings.xml
 .settings/org.eclipse.cdt.codan.core.prefs
-app/*/.settings/language.settings.xml
 scripts/*.mex*
 scripts/logAnalyzer/*.mex*
 *.kdev4
+/build/
+git_version.h
