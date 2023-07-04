@@ -131,7 +131,7 @@ void WifiInit()
 	TIM7->SR = 0;
 	TIM7->DIER = TIM_DIER_UIE;
 	TIM7->PSC = 216; 	// clock is now 1MHz
-	TIM7->ARR = 1250;	// = 1.25ms <=> 800Hz
+	TIM7->ARR = 1000;	// = 1.00ms <=> 1000Hz, this is the maximum rate, if bot is unreachable only 1.25ms can be achieved
 	TIM7->CR1 |= TIM_CR1_CEN;
 
 	NVICEnableIRQ(TIM7_IRQn, IRQL_NRF24_TIMER);

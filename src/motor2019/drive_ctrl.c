@@ -127,6 +127,8 @@ static inline void sinCos_S0_15(uint16_t angle, int32_t* pSin, int32_t* pCos);
 
 void DriveCtrlInit()
 {
+	data.sensors.adc.currentOffset_S16_0 = 10837;
+
 	PICtrlS12Init(&data.ctrl.currentD, 0, 0, -512, 512);
 	PICtrlS12Init(&data.ctrl.currentQ, 0, 0, -512, 512);
 	PICtrlS12Init(&data.ctrl.speed, 0, 0, -4096, 4095);
@@ -438,6 +440,10 @@ void DriveCtrlUpdatePerPWMCycle()
 	data.sensors.adc.currentUVW_S15_15[0] = curMult_Q3_15 * (((curU0Adc_U12_0 + curU1Adc_U12_0) >> 1) - curZeroAdc_U12_0);
 	data.sensors.adc.currentUVW_S15_15[1] = curMult_Q3_15 * (((curV0Adc_U12_0 + curV1Adc_U12_0) >> 1) - curZeroAdc_U12_0);
 	data.sensors.adc.currentUVW_S15_15[2] = curMult_Q3_15 * (((curW0Adc_U12_0 + curW1Adc_U12_0) >> 1) - curZeroAdc_U12_0);
+
+	// compute filtered current offset for fault detection
+	int32_t curZero_S16_0 = ((curMult_Q3_15 * curZeroAdc_U12_0) >> 15);
+	data.sensors.adc.currentOffset_S16_0 = (curZero_S16_0 + 7*data.sensors.adc.currentOffset_S16_0) >> 3;
 
 	// I_alpha = 2/3 * I_U - 1/3 * I_V - 1/3 * I_W
 	// I_beta = 1/sqrt(3) * I_V - 1/sqrt(3) * I_W

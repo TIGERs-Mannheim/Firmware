@@ -20,7 +20,7 @@ const LogMessageDesc logMessageDescriptions[10] = {
 		{ INT16, "Y", "raw", "Y axis" },
 		{ INT16, "Z", "raw", "Z axis" },
 	}, },
-	{ SID_SENSORS, "sensors", 75, (ElementDesc[]) {
+	{ SID_SENSORS, "sensors", 81, (ElementDesc[]) {
 		// 0 + 5
 		{ UINT32,	"vel_t", "us",	"Motor velocity timestamp" },
 		{ FLOAT,	"vel_m1", "rad/s","Motor 1 angular velocity" },
@@ -121,6 +121,14 @@ const LogMessageDesc logMessageDescriptions[10] = {
 		// 73 + 2
 		{ UINT32,	"pattern_id", "ID", "Detected pattern ID" },
 		{ UINT32,	"pattern_flags", "", "Pattern ident status" },
+
+		// 75 + 6
+		{ UINT32,	"point_dist_updated", "-", "Point distance sensor updated" },
+		{ UINT32,	"point_dist_t", "us", "Point distance timestamp" },
+		{ UINT32,	"point_dist_valid_cols", "-", "Columns with a valid color" },
+		{ FLOAT,	"point_dist_avg_height", "m", "Avg. column height" },
+		{ FLOAT,	"point_dist_avg_y_bottom", "m", "Avg. bottom Y position" },
+		{ UINT32,	"point_dist_mostly_white", "-", "True if most columns are white" },
 	}, },
 	{ SID_CTRL_STATE, "ctrl_state", 18, (ElementDesc[]) {
 		{ FLOAT,	"pos_x", "m", "X Position" },

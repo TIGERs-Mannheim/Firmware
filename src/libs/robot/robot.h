@@ -100,5 +100,6 @@ void RobotImplDribblerOutput(const DribblerInput* pDribbler);
 void RobotImplBuzzerPlay(uint16_t seqId);
 void RobotImplSetLEDs(uint8_t state);
 void RobotImplKickerAutoCharge(uint8_t enable);
-void RobotImplExtSendMatchFeedback(const SystemMatchFeedback* pFeedback);
 uint8_t RobotImplGetHardwareId();
+int16_t RobotImplExtSendPacket(PacketHeader* pHeader, const void* _pData, uint16_t dataLength);
+void RobotImplSetEnabledDetectors(uint32_t detectors);

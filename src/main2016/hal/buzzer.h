@@ -9,13 +9,7 @@
 #define __BUZZER_H__
 
 #include "ch.h"
-
-typedef struct _BuzzerSequence
-{
-	uint16_t* pSong;
-	uint16_t numTones;
-	uint8_t once;
-} BuzzerSequence;
+#include "util/songs.h"
 
 typedef struct _Buzzer
 {
@@ -27,21 +21,6 @@ typedef struct _Buzzer
 } Buzzer;
 
 extern Buzzer buzzer;
-
-extern const BuzzerSequence buzzSeqBeepFast;
-extern const BuzzerSequence buzzSeqUp50;
-extern const BuzzerSequence buzzSeqUp20;
-extern const BuzzerSequence buzzSeqUpDown20;
-extern const BuzzerSequence buzzSeqDoubleBeepSlow;
-extern const BuzzerSequence buzzSeqUp100;
-extern const BuzzerSequence buzzSeqDown100;
-extern const BuzzerSequence buzzSeqDown50;
-extern const BuzzerSequence buzzSeqTada;
-extern const BuzzerSequence buzzSeqCant;
-extern const BuzzerSequence buzzSeqFinalShort;
-extern const BuzzerSequence buzzSeqElevator;
-extern const BuzzerSequence buzzSeqEyeLead;
-extern const BuzzerSequence buzzSeqEyeFollow;
 
 void BuzzerInit();
 void BuzzerTone(uint16_t freq);

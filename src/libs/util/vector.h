@@ -5,26 +5,9 @@
  *      Author: AndreR
  */
 
-#ifndef VECTOR_H_
-#define VECTOR_H_
+#pragma once
 
-#include "arm_math.h"
-
-typedef union _Vector3f
-{
-	float data[3];
-
-	struct
-	{
-		float x;
-		float y;
-		union
-		{
-			float z;
-			float w;
-		};
-	};
-} Vector3f;
+#include <stdint.h>
 
 typedef union _Vector2f
 {
@@ -37,16 +20,25 @@ typedef union _Vector2f
 	};
 } Vector2f;
 
-Vector2f Vector2fCreate(float x, float y);
-Vector3f Vector3fCreate(float x, float y, float z);
-float Vector2fLength(Vector2f v);
-float Vector3fLength(Vector3f v);
-Vector2f Vector2fSubtract(Vector2f a, Vector2f b);
-Vector2f Vector2fAdd(Vector2f a, Vector2f b);
-Vector2f Vector2fMultiply(Vector2f a, float factor);
-Vector2f Vector2fScale(Vector2f a, float length);
-float Vector2fDistance(Vector2f a, Vector2f b);
-float Vector3fDistance(Vector3f a, Vector3f b);
-float Vector2fAngle(Vector2f a);
+Vector2f Vector2fFromData(const float* pData);
+Vector2f Vector2fFromXY(float x, float y);
+Vector2f Vector2fFromPoints(Vector2f from, Vector2f to);
+Vector2f Vector2fFromAngleLength(float rad, float length);
 
-#endif /* VECTOR_H_ */
+Vector2f Vector2fAdd(Vector2f a, Vector2f b);
+Vector2f Vector2fSubtract(Vector2f a, Vector2f b);
+Vector2f Vector2fScale(Vector2f a, float factor);
+Vector2f Vector2fScaleTo(Vector2f a, float length);
+Vector2f Vector2fNormalize(Vector2f v);
+Vector2f Vector2fRotate(Vector2f v, float rad);
+Vector2f Vector2fGetNormalVector(Vector2f v);
+float	Vector2fDotProduct(Vector2f a, Vector2f b);
+
+float	Vector2fGetLength(Vector2f v);
+float	Vector2fGetAngle(Vector2f v);
+float	Vector2fLookAtGetAngle(Vector2f from, Vector2f to);
+float	Vector2fGetAngleBetween(Vector2f a, Vector2f b);
+
+float	Vector2fGetDistanceBetween(Vector2f from, Vector2f to);
+
+uint8_t	Vector2fIsFinite(Vector2f v);

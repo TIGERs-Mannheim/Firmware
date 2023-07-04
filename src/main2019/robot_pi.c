@@ -29,53 +29,57 @@ RobotPi robotPi = {
 		.wbAutoMode = 1,
 		.wbRedGain = 1.0f,
 		.wbBlueGain = 1.0f,
-	},
-	.previewConfig = {
-		.enable = 0,
+		.forcedResolution = -1,
 	},
 	.cameraControl = {
-		.resolution = 1,
+		.resolution = 2,
 		.recording = 0,
 	},
-	.cameraIntrinsics = {
-		.resolution = { 2592, 1944 },
-		.focalLength = 1342.0f,
-		.principalPoint = { 1305.39f, 971.45f },
-		.radialDistortion = { -0.279324740320405f, 0.0581955384718963f },
+	.colorClassifierConfig = {
+		.thresholds = {
+			{ // Orange
+				.y = {  40, 220 },
+				.u = {   0, 150 },
+				.v = { 140, 255 },
+			},
+			{ // White
+				.y = { 144, 255 },
+				.u = {  80, 192 },
+				.v = {  64, 176 },
+			},
+			{ // Black
+				.y = {   0,  32 },
+				.u = { 112, 144 },
+				.v = { 112, 160 },
+			},
+		},
 	},
-	.cameraExtrinsics = {
-		.cameraTiltDeg = 20.0f,
-		.cameraPos = { 0, 0.0729f, 0.0701f },
-		.groundClearance = 0.01f,
-	},
-	.ballDetectionConfig = {
-		.topImageSkipFactor = 0.25f,
-		.minBlobArea = 5,
-		.ballDiameter = 0.043f,
+	.ballLocalisationConfig = {
+		.topImageSkipFactor = 0.28f,
 		.greedyCircleFactor = 1.25f,
+		.minBlobArea = 20,
 		.maxTrackers = 5,
-		.trackerTimeout = 1.0f,
-	},
-	.ballTrackerConfig = {
+		.trackerTimeoutMs = 1000,
+		.historySize = 10,
 		.modelError = 0.1f,
 		.measError = 10.0f,
-		.maxVelocity = 10.0f,
-		.historySize = 10,
+		.maxVelocity = 5.0f,
+		.usePlaneIntersection = 0,
 	},
-	.colorThresholdsOrange = {
-		.colorId = EXT_COLOR_THRESHOLDS_ID_ORANGE,
-		.y = { 50, 255 },
-		.u = { 0, 150 },
-		.v = { 160, 255 },
+	.pointDistConfig = {
+		.blackThreshold = 50,
+		.whiteThreshold = 105,
+		.tooWhiteThreshold = 180,
+		.bottomSkipPercent = 0.3f,
+		.topSkipPercent = 0.26f,
+		.centerCoverPercent = 0.08f,
 	},
-	.fieldInfo = {
-		.fieldSize = { 3.53f, 4.63f },
-		.botOrientation = 0.0f,
-	},
+	.enablePreview = 0,
+	.enabledSteps = EXT_STEP_MASK_BALL_LOC,
 };
 
 static const ConfigFileDesc configFileDescCameraConfig =
-{ SID_CFG_CAMERA, 1, "camera", 7, (ElementDesc[]) {
+{ SID_CFG_CAMERA, 2, "camera", 8, (ElementDesc[]) {
 	{  UINT8, "exp_auto", "bool", "Auto Exposure" },
 	{  FLOAT, "analog_gain", "1.0-8.0", "Analog Gain" },
 	{  FLOAT, "digital_gain", "1.0-2.0", "Digital Gain" },
@@ -83,12 +87,51 @@ static const ConfigFileDesc configFileDescCameraConfig =
 	{  UINT8, "wb_auto", "bool", "Auto White Balance" },
 	{  FLOAT, "wb_gain_red", "0.9-1.9", "WB Gain Red" },
 	{  FLOAT, "wb_gain_blue", "0.9-1.9", "WB Gain Blue" },
+	{   INT8, "forced_res", "-1, 0-2", "Force camera resolution" },
+}};
+
+static const ConfigFileDesc configFileDescBallLocalisation =
+{ SID_CFG_BALL_LOCALISATION, 0, "ext/ball_loc", 10, (ElementDesc[]) {
+	{  FLOAT, "top_skip", "%", "Skip Image Top" },
+	{  FLOAT, "greedy_circle", "-", "Greedy Circle Factor" },
+	{ UINT16, "A_min_blob", "px", "Min. Blob Area" },
+	{ UINT16, "max_trackers", "-", "Max. Ball Trackers" },
+	{ UINT16, "tracker_timeout", "ms", "Tracker Timeout" },
+	{ UINT16, "hist_size", "-", "Line Fit Samples" },
+	{  FLOAT, "err_model", "m", "Model Error" },
+	{  FLOAT, "err_meas", "m", "Measurement Error" },
+	{  FLOAT, "max_vel", "m/s", "Outlier Max. Velocity" },
+	{  UINT8, "use_plane_intersect", "bool", "Use Plane Intersection for Dist." },
+}};
+
+static const ConfigFileDesc configFileDescColorClassifier =
+{ SID_CFG_COLOR_CLASSIFIER, 0, "ext/color_lut", 18, (ElementDesc[]) {
+	{  UINT8, "orange_y_min", "-", "orange/y_min" },
+	{  UINT8, "orange_y_max", "-", "orange/y_max" },
+	{  UINT8, "orange_u_min", "-", "orange/u_min" },
+	{  UINT8, "orange_u_max", "-", "orange/u_max" },
+	{  UINT8, "orange_v_min", "-", "orange/v_min" },
+	{  UINT8, "orange_v_max", "-", "orange/v_max" },
+	{  UINT8, "white_y_min", "-", "white/y_min" },
+	{  UINT8, "white_y_max", "-", "white/y_max" },
+	{  UINT8, "white_u_min", "-", "white/u_min" },
+	{  UINT8, "white_u_max", "-", "white/u_max" },
+	{  UINT8, "white_v_min", "-", "white/v_min" },
+	{  UINT8, "white_v_max", "-", "white/v_max" },
+	{  UINT8, "black_y_min", "-", "black/y_min" },
+	{  UINT8, "black_y_max", "-", "black/y_max" },
+	{  UINT8, "black_u_min", "-", "black/u_min" },
+	{  UINT8, "black_u_max", "-", "black/u_max" },
+	{  UINT8, "black_v_min", "-", "black/v_min" },
+	{  UINT8, "black_v_max", "-", "black/v_max" },
 }};
 
 void RobotPiInit()
 {
 	robotPi.currentTrackerId = 0xFFFFFFFF;
 	robotPi.pConfigFileCameraConfig = ConfigOpenOrCreate(&configFileDescCameraConfig, &robotPi.cameraConfig, sizeof(ExtCameraConfig), 0, 0);
+	robotPi.pConfigFileBallLocalisationConfig = ConfigOpenOrCreate(&configFileDescBallLocalisation, &robotPi.ballLocalisationConfig, sizeof(ExtBallLocalisationConfig), 0, 0);
+	robotPi.pConfigFileColorClassifierConfig = ConfigOpenOrCreate(&configFileDescColorClassifier, &robotPi.colorClassifierConfig, sizeof(ExtColorClassifierConfig), 0, 0);
 }
 
 void RobotPiTask(void* params)
@@ -120,41 +163,43 @@ void RobotPiTask(void* params)
 		header.cmd = CMD_EXT_ROBOT_STATE;
 		ExtSendPacket(&header, &state, sizeof(ExtRobotState));
 
-		header.cmd = CMD_EXT_FIELD_INFO;
-		float hardIronCompX = robot.sensors.mag.strength[0] - ctrlTigga.configCompass.hardIronX;
-		float hardIronCompY = robot.sensors.mag.strength[1] - ctrlTigga.configCompass.hardIronY;
-		float softIronCompX = (ctrlTigga.configCompass.softIronCos*hardIronCompX + ctrlTigga.configCompass.softIronSin*hardIronCompY) * ctrlTigga.configCompass.softEllipseEcc;
-		float softIronCompY = ctrlTigga.configCompass.softIronCos*hardIronCompY - ctrlTigga.configCompass.softIronSin*hardIronCompX;
-		robotPi.fieldInfo.botOrientation = AngleNormalize(arm_atan2_f32(softIronCompX, softIronCompY) - ctrlTigga.configCompass.fieldOffset);
-		ExtSendPacket(&header, &robotPi.fieldInfo, sizeof(ExtFieldInfo));
+		if(robotPi.cameraConfig.forcedResolution >= 0 && robotPi.cameraConfig.forcedResolution <= 2)
+			robotPi.cameraControl.resolution = robotPi.cameraConfig.forcedResolution;
 
-		if(counter >= 10)
+		if(counter >= 100) // 10 Hz
 		{
 			counter = 0;
+
+			header.cmd = CMD_EXT_STEP_CONFIG;
+			ExtStepConfig cfg;
+			cfg.debugSteps = robotPi.debugSteps;
+			cfg.debugLevel = robotPi.debugLevel;
+			cfg.enabledSteps = robotPi.enabledSteps | EXT_STEP_MASK_YPRESUMMER | EXT_STEP_MASK_COLOR_CLASSIFIER | EXT_STEP_MASK_REGION_EXTRACTOR | EXT_STEP_MASK_RLE_RECORDER;
+			if(robotPi.enablePreview)
+				cfg.enabledSteps |= EXT_STEP_MASK_MINI_PREVIEW;
+
+			ExtSendPacket(&header, &cfg, sizeof(ExtStepConfig));
 
 			header.cmd = CMD_EXT_CAMERA_CONFIG;
 			ExtSendPacket(&header, &robotPi.cameraConfig, sizeof(ExtCameraConfig));
 
-			header.cmd = CMD_EXT_CAMERA_PREVIEW_CONFIG;
-			ExtSendPacket(&header, &robotPi.previewConfig, sizeof(ExtCameraPreviewConfig));
-
 			header.cmd = CMD_EXT_CAMERA_CONTROL;
 			ExtSendPacket(&header, &robotPi.cameraControl, sizeof(ExtCameraControl));
 
-			header.cmd = CMD_EXT_CAMERA_INTRINSICS;
-			ExtSendPacket(&header, &robotPi.cameraIntrinsics, sizeof(ExtCameraIntrinsics));
-
-			header.cmd = CMD_EXT_CAMERA_EXTRINSICS;
-			ExtSendPacket(&header, &robotPi.cameraExtrinsics, sizeof(ExtCameraExtrinsics));
-
-			header.cmd = CMD_EXT_BALL_DETECTION_CONFIG;
-			ExtSendPacket(&header, &robotPi.ballDetectionConfig, sizeof(ExtBallDetectionConfig));
-
-			header.cmd = CMD_EXT_BALL_TRACKER_CONFIG;
-			ExtSendPacket(&header, &robotPi.ballTrackerConfig, sizeof(ExtBallTrackerConfig));
+			header.cmd = CMD_EXT_BALL_LOC_CONFIG;
+			ExtSendPacket(&header, &robotPi.ballLocalisationConfig, sizeof(ExtBallLocalisationConfig));
 
 			header.cmd = CMD_EXT_COLOR_THRESHOLDS;
-			ExtSendPacket(&header, &robotPi.colorThresholdsOrange, sizeof(ExtColorThresholds));
+			ExtColorThresholds thresh;
+			for(uint8_t i = 0; i < 3; i++)
+			{
+				thresh.colorId = i;
+				memcpy(thresh.y, robotPi.colorClassifierConfig.thresholds[i].y, sizeof(uint8_t)*6);
+				ExtSendPacket(&header, &thresh, sizeof(ExtColorThresholds));
+			}
+
+			header.cmd = CMD_EXT_POINT_DIST_SENSOR_CFG;
+			ExtSendPacket(&header, &robotPi.pointDistConfig, sizeof(ExtPointDistanceSensorConfig));
 		}
 
 		counter++;
@@ -223,6 +268,25 @@ void RobotPiUpdateBallSensorData(RobotSensors* pSensors)
 	}
 }
 
+void RobotPiUpdatePointDistanceSensorData(RobotSensors* pSensors)
+{
+	if(robotPi.pointDistanceSensorUpdated)
+	{
+		pSensors->pointDist.time = robotPi.pointDistanceSensor.timestampUs;
+		pSensors->pointDist.avgHeight = robotPi.pointDistanceSensor.avgHeight;
+		pSensors->pointDist.avgYBottom = robotPi.pointDistanceSensor.avgYBottom;
+		pSensors->pointDist.validColumns = robotPi.pointDistanceSensor.validColumns;
+		pSensors->pointDist.isMostlyWhite = robotPi.pointDistanceSensor.isMostlyWhite;
+
+		pSensors->pointDist.updated = 1;
+		robotPi.pointDistanceSensorUpdated = 0;
+	}
+	else
+	{
+		pSensors->pointDist.updated = 0;
+	}
+}
+
 void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, uint32_t dataLength)
 {
 	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_BALL_DETECTIONS)
@@ -241,6 +305,21 @@ void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, u
 		}
 	}
 
+	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_POINT_DIST_SENSOR)
+	{
+		if(dataLength < sizeof(ExtPointDistSensor))
+		{
+			LogWarnC("Invalid point dist sensor msg", dataLength);
+		}
+		else
+		{
+			ExtPointDistSensor* pPoint = (ExtPointDistSensor*)pData;
+
+			robotPi.pointDistanceSensor = *pPoint;
+			robotPi.pointDistanceSensorUpdated = 1;
+		}
+	}
+
 	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_ROBOT_PI_VERSION)
 	{
 		if(dataLength < sizeof(ExtRobotPiVersion))
@@ -250,6 +329,18 @@ void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, u
 		else
 		{
 			memcpy(&robotPi.robotPiVersion, pData, sizeof(ExtRobotPiVersion));
+		}
+	}
+
+	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_UPDATE_PROGRESS)
+	{
+		if(dataLength < sizeof(ExtUpdateProgress))
+		{
+			LogWarnC("Invalid ext update progress", dataLength);
+		}
+		else
+		{
+			memcpy(&robotPi.updateProgress, pData, sizeof(ExtUpdateProgress));
 		}
 	}
 
@@ -265,6 +356,18 @@ void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, u
 		}
 	}
 
+	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_CAMERA_CALIBRATION)
+	{
+		if(dataLength < sizeof(ExtCameraCalibration))
+		{
+			LogWarnC("Invalid CameraCalibration message", dataLength);
+		}
+		else
+		{
+			memcpy(&robotPi.cameraCalibration, pData, sizeof(ExtCameraCalibration));
+		}
+	}
+
 	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_CAMERA_PREVIEW_LINE_160)
 	{
 		if(dataLength < sizeof(ExtCameraPreviewLine160))
@@ -275,7 +378,7 @@ void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, u
 		{
 			ExtCameraPreviewLine160* pLine = (ExtCameraPreviewLine160*)pData;
 
-			if(!robotPi.previewConfig.enable)
+			if(!robotPi.enablePreview)
 				return;
 
 			// stream directly to display
@@ -301,38 +404,6 @@ void RobotPiHandleExtPacket(const PacketHeader* pHeader, const uint8_t* pData, u
 				*TFT_DATA_REG = pLine->data[x];
 
 			gfxMutexExit(&GDISP->mutex);
-		}
-	}
-	
-	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_POSITION_DETECTION)
-	{
-		if(dataLength < sizeof(ExtPositionDetection))
-		{
-			LogWarnC("Invalid position container size from EXT", dataLength);
-		}
-		else
-		{
-			ExtPositionDetection* pPositionContainer = (ExtPositionDetection*) pData;
-
-			robotPi.lastPositionLatency = SysTimeUSec() - pPositionContainer->timestampUs;
-			robotPi.positionDetection = *pPositionContainer;
-			robotPi.positionDetectionUpdated = 1;
-		}
-	}
-
-	if(pHeader->section == SECTION_EXT && pHeader->cmd == CMD_EXT_GOAL_DETECTIONS)
-	{
-		if(dataLength < sizeof(ExtGoalDetections))
-		{
-			LogWarnC("Invalid goal container size from EXT", dataLength);
-		}
-		else
-		{
-			ExtGoalDetections* pGoalsContainer = (ExtGoalDetections*) pData;
-
-			robotPi.lastGoalLatency = SysTimeUSec() - pGoalsContainer->timestampUs;
-			robotPi.goalDetections = *pGoalsContainer;
-			robotPi.goalDetectionUpdated = 1;
 		}
 	}
 }

@@ -57,3 +57,25 @@ void AngleNormalizePtr(float* a)
 {
 	*a = mod(*a + M_PI, M_TWOPI) - M_PI;
 }
+
+// shortest angle from a to b in radians
+float AngleDiff(float a, float b)
+{
+	return AngleNormalize(AngleNormalize(b) - AngleNormalize(a));
+}
+
+// shortest absolute angle between a and b
+float AngleDiffAbs(float a, float b)
+{
+	return fabsf(AngleDiff(a, b));
+}
+
+float AngleDeg2Rad(float deg)
+{
+	return deg * ((float)M_PI)/180.0f;
+}
+
+float AngleRad2Deg(float rad)
+{
+	return rad * (180.0f/(float)M_PI);
+}

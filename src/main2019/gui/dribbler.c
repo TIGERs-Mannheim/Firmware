@@ -30,9 +30,9 @@ typedef struct _DribblerPreset
 
 static const DribblerPreset presets[4] = {
 	{ 0, 0, 0 },
-	{ DRIBBLER_MODE_SPEED,   2.5f, 5000.0f },
-	{ DRIBBLER_MODE_SPEED,   4.0f, 12000.0f },
-	{ DRIBBLER_MODE_SPEED,   5.0f, 20000.0f }
+	{ DRIBBLER_MODE_SPEED,  1.25f, 2500.0f },
+	{ DRIBBLER_MODE_SPEED,  2.5f,  2500.0f },
+	{ DRIBBLER_MODE_SPEED,  4.5f,  4000.0f },
 };
 
 static int16_t eventHandler(GEvent* pEvent)

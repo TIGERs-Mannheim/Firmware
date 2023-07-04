@@ -53,7 +53,7 @@ BotParameters botParams = {
 			.L = 35e-6f,
 		}
 	},
-	.physical = { 0.03f, 31.0f, 45.0f, 0.079f, 2.46f , 0.093f },
+	.physical = { 0.032f, 31.0f, 45.0f, 0.079f, 2.46f , 0.093f },
 	.v2016 = 0,
 };
 
@@ -98,6 +98,7 @@ static CtrlPantheraConfigCtrl configCtrl = {
 	.posXY = { 8.0f, 1.0f, 0.05f },
 	.posW = { 4.0f, 8.0f, 0.05f },
 	.velW = { 1.0f, 2.0f },
+	.dribblerCurrent2Acc = 1.0f,
 };
 
 void RobotImplInit()
@@ -107,7 +108,7 @@ void RobotImplInit()
 	ctrlPantheraConfigModelDesc.pName = "v2020/model";
 
 	ctrlPantheraConfigCtrlDesc.cfgId = SID_CFG_CTRL_PANTHERA_CTRL_V2020;
-	ctrlPantheraConfigCtrlDesc.version = 1;
+	ctrlPantheraConfigCtrlDesc.version = 2;
 	ctrlPantheraConfigCtrlDesc.pName = "v2020/ctrl";
 
 	fusionEKFConfigDesc.cfgId = SID_CFG_FUSION_EKF_V2020;
@@ -225,6 +226,9 @@ void RobotImplUpdateSensors(RobotSensors* pSensors)
 
 	// Ball Detector
 	RobotPiUpdateBallSensorData(pSensors);
+
+	// Simple point distance sensor based on black/white detection
+	RobotPiUpdatePointDistanceSensorData(pSensors);
 
 	if(SysTimeUSec() - robotPi.ballDetections.timestampUs < 1000000)
 		botParams.extInstalled = 1;
@@ -394,17 +398,12 @@ void RobotImplSetLEDs(uint8_t state)
 	}
 }
 
-void RobotImplExtSendMatchFeedback(const SystemMatchFeedback* pFeedback)
+int16_t RobotImplExtSendPacket(PacketHeader* pHeader, const void* _pData, uint16_t dataLength)
 {
-	static uint32_t lastFeedbackTime = 0;
+	return ExtSendPacket(pHeader, _pData, dataLength);
+}
 
-	if((SysTimeUSec() - lastFeedbackTime) < 10000)
-		return;
-
-	lastFeedbackTime = SysTimeUSec();
-
-	PacketHeader header;
-	header.section = SECTION_SYSTEM;
-	header.cmd = CMD_SYSTEM_MATCH_FEEDBACK;
-	ExtSendPacket(&header, pFeedback, sizeof(SystemMatchFeedback));
+void RobotImplSetEnabledDetectors(uint32_t detectors)
+{
+	robotPi.enabledSteps = detectors;
 }

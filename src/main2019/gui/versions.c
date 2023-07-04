@@ -9,6 +9,7 @@
 #include "version.h"
 #include "util/boot.h"
 #include <stdio.h>
+#include <string.h>
 
 static struct _handles
 {
@@ -51,13 +52,20 @@ GHandle VersionsCreate()
 
 void VersionsUpdateExt(ExtRobotPiVersion* pRobotPiVersion, uint8_t installed)
 {
-	static char versionBuf[12];
+	static char versionBuf[32];
+	static char dateBuf[32];
 
 	if(installed)
 	{
-		snprintf(versionBuf, 12, "%5hu.%-5hu", (uint16_t)pRobotPiVersion->major, (uint16_t)pRobotPiVersion->minor);
+		uint32_t major = pRobotPiVersion->version >> 24;
+		uint32_t minor = (pRobotPiVersion->version >> 16) & 0xFF;
+		uint32_t patch = (pRobotPiVersion->version >> 8) & 0xFF;
+		uint32_t dirty = pRobotPiVersion->version & 0xFF;
+
+		snprintf(versionBuf, 32, "v%u.%u.%u%s", major, minor, patch, dirty ? "-dirty" : "");
+		strncpy(dateBuf, pRobotPiVersion->date, sizeof(dateBuf));
 		gwinSetText(handles.hExtVersion, versionBuf, FALSE);
-		gwinSetText(handles.hExtBuildDate, pRobotPiVersion->date, FALSE);
+		gwinSetText(handles.hExtBuildDate, dateBuf, FALSE);
 	}
 	else
 	{

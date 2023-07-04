@@ -1,7 +1,8 @@
 #include "skill_intercept_ball.h"
 #include "commands.h"
+#include "util/line.h"
 #include "util/sys_time.h"
-#include "util/geometry.h"
+#include "util/angle_math.h"
 #include "skill_basics.h"
 
 #define BALL_VELOCITY_THRESHOLD 0.5f
@@ -44,23 +45,23 @@ SkillInstance skillInterceptBall = { &interceptBallInit, &interceptBallRun, 0 };
 
 static Vector2f getBotPositionFromDribblerPosition(Vector2f ballAtDribblerPos, float orientation, float distCenterToDribbler)
 {
-	Vector2f ballToBotCenter = GeometryCreateVectorFromAngle(orientation, -distCenterToDribbler);
+	Vector2f ballToBotCenter = Vector2fFromAngleLength(orientation, -distCenterToDribbler);
 
-	return GeometryVectorAdd(ballAtDribblerPos, ballToBotCenter);
+	return Vector2fAdd(ballAtDribblerPos, ballToBotCenter);
 }
 
 static Vector2f getDribblerPositionFromBotPosition(Vector2f botPos, float orientation, float distCenterToDribbler)
 {
-	Vector2f botCenterToBall = GeometryCreateVectorFromAngle(orientation, distCenterToDribbler);
+	Vector2f botCenterToBall = Vector2fFromAngleLength(orientation, distCenterToDribbler);
 
-	return GeometryVectorAdd(botPos, botCenterToBall);
+	return Vector2fAdd(botPos, botCenterToBall);
 }
 
 static void interceptBallInit(const SkillInput *pInput)
 {
 	interceptBall.state = STATE_WAIT_FOR_MOVEMENT;
 
-	Vector2f curPos = GeometryVector2f(pInput->pState->pos);
+	Vector2f curPos = Vector2fFromData(pInput->pState->pos);
 	Vector2f dribPos = getDribblerPositionFromBotPosition(curPos, pInput->pState->pos[2], pInput->pAux->physical.dribblerDistance);
 
 	interceptBall.targetPositionDribbler.x = dribPos.x;
@@ -77,13 +78,13 @@ static void updateInterceptionPoint(const SkillInput* pInput)
 	SkillInterceptBallInput* pIntercept = (SkillInterceptBallInput*)pInput->pData;
 
 	Line2f ballTravelLine;
-	ballTravelLine.origin = GeometryVector2f(pInput->pSensors->ball.linePos);
-	ballTravelLine.dir = GeometryVector2f(pInput->pSensors->ball.lineDir);
+	ballTravelLine.origin = Vector2fFromData(pInput->pSensors->ball.linePos);
+	ballTravelLine.dir = Vector2fFromData(pInput->pSensors->ball.lineDir);
 
-	Vector2f interceptPoint = GeometryClosestPointOnLine(ballTravelLine, interceptBall.targetPositionDribbler);
+	Vector2f interceptPoint = Line2fNearestPointOnLine(ballTravelLine, interceptBall.targetPositionDribbler);
 
-	Vector2f desired2Intercept = GeometryCreateVectorFromAToB(interceptBall.targetPositionDribbler, interceptPoint);
-	float dist2Intercept = GeometryNorm(desired2Intercept);
+	Vector2f desired2Intercept = Vector2fFromPoints(interceptBall.targetPositionDribbler, interceptPoint);
+	float dist2Intercept = Vector2fGetLength(desired2Intercept);
 	float moveRadius = pIntercept->moveRadius*0.001f;
 
 	if(moveRadius > 0.0f && dist2Intercept > moveRadius)
@@ -92,7 +93,7 @@ static void updateInterceptionPoint(const SkillInput* pInput)
 		desired2Intercept.y *= moveRadius / dist2Intercept;
 	}
 
-	Vector2f adjustedInterceptPoint = GeometryVectorAdd(interceptBall.targetPositionDribbler, desired2Intercept);
+	Vector2f adjustedInterceptPoint = Vector2fAdd(interceptBall.targetPositionDribbler, desired2Intercept);
 
 	interceptBall.interceptPoint = getBotPositionFromDribblerPosition(adjustedInterceptPoint,
 			interceptBall.targetOrientation, pInput->pAux->physical.dribblerDistance);
@@ -155,15 +156,15 @@ static void stateWaitForMovement(const SkillInput *pInput)
 {
 	if(isfinite(pInput->pSensors->ball.pos[0]))
 	{
-		Vector2f ballPos = GeometryVector2f(pInput->pSensors->ball.pos);
-		Vector2f ballVel = GeometryVector2f(pInput->pSensors->ball.vel);
-		float ballVelAbs = GeometryNorm(ballVel);
+		Vector2f ballPos = Vector2fFromData(pInput->pSensors->ball.pos);
+		Vector2f ballVel = Vector2fFromData(pInput->pSensors->ball.vel);
+		float ballVelAbs = Vector2fGetLength(ballVel);
 
-		Vector2f ballToDesired = GeometryCreateVectorFromAToB(ballPos, interceptBall.targetPositionDribbler);
+		Vector2f ballToDesired = Vector2fFromPoints(ballPos, interceptBall.targetPositionDribbler);
 
-		float angle = GeometryAngleBetweenVectors(ballToDesired, ballVel);
+		float angle = Vector2fGetAngleBetween(ballToDesired, ballVel);
 
-		if(ballVelAbs > BALL_VELOCITY_THRESHOLD && angle < GeometryDeg2Rad(INTERCEPT_ANGLE_THRESHOLD_DEG))
+		if(ballVelAbs > BALL_VELOCITY_THRESHOLD && angle < AngleDeg2Rad(INTERCEPT_ANGLE_THRESHOLD_DEG))
 		{
 			// once valid interception found => go to next state and catch/redirect
 			updateInterceptionPoint(pInput);
@@ -176,8 +177,8 @@ static void stateInterceptDynamic(const SkillInput *pInput)
 {
 	if(isfinite(pInput->pSensors->ball.pos[0]))
 	{
-		Vector2f ballVel = GeometryVector2f(pInput->pSensors->ball.vel);
-		float ballVelAbs = GeometryNorm(ballVel);
+		Vector2f ballVel = Vector2fFromData(pInput->pSensors->ball.vel);
+		float ballVelAbs = Vector2fGetLength(ballVel);
 
 		if(ballVelAbs > BALL_VELOCITY_THRESHOLD)
 		{
@@ -186,13 +187,13 @@ static void stateInterceptDynamic(const SkillInput *pInput)
 
 		// use extrapolation with ball vel
 		float latency = (SysTimeUSec() - pInput->pSensors->ball.time) * 1e-6f;
-		Vector2f ballPos = GeometryVector2f(pInput->pSensors->ball.pos);
+		Vector2f ballPos = Vector2fFromData(pInput->pSensors->ball.pos);
 
 		Vector2f futurePos;
 		futurePos.x = ballPos.x + ballVel.x*latency;
 		futurePos.y = ballPos.y + ballVel.y*latency;
 
-		float distanceToBall = GeometryDistanceBetweenTwoPoints(futurePos, interceptBall.interceptPoint);
+		float distanceToBall = Vector2fGetDistanceBetween(futurePos, interceptBall.interceptPoint);
 		if(distanceToBall < LOCK_DISTANCE_THRESHOLD)
 		{
 			interceptBall.state = STATE_INTERCEPT_LOCKED;
@@ -213,8 +214,8 @@ static void stateInterceptLocked(const SkillInput *pInput)
 
 	if(isfinite(pInput->pSensors->ball.pos[0]))
 	{
-		Vector2f ballPos = GeometryVector2f(pInput->pSensors->ball.pos);
-		float distanceToBall = GeometryDistanceBetweenTwoPoints(ballPos, interceptBall.interceptPoint);
+		Vector2f ballPos = Vector2fFromData(pInput->pSensors->ball.pos);
+		float distanceToBall = Vector2fGetDistanceBetween(ballPos, interceptBall.interceptPoint);
 		if(distanceToBall > LOCK_DISTANCE_THRESHOLD*2.0f)
 		{
 			leaveState = 1;

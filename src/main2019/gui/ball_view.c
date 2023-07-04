@@ -48,7 +48,7 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hContLive, FALSE);
 			gwinSetVisible(handles.hContMap, TRUE);
 
-			robotPi.previewConfig.enable = 0;
+			robotPi.enablePreview = 0;
 		}
 
 		if(pBtn->gwin == handles.hBtnLive)
@@ -56,7 +56,7 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hContMap, FALSE);
 			gwinSetVisible(handles.hContLive, TRUE);
 
-			robotPi.previewConfig.enable = 1;
+			robotPi.enablePreview = 1;
 		}
 
 		if(pBtn->gwin == handles.hBtnFar)

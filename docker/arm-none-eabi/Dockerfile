@@ -6,7 +6,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt update
 
-RUN apt install -y cmake git make wget bzip2 curl && \
+RUN apt install -y cmake git make wget bzip2 curl g++ && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 

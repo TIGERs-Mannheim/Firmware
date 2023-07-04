@@ -1,8 +1,9 @@
+#include <util/line.h>
 #include "skill_get_ball.h"
 #include "commands.h"
 #include "skill_basics.h"
 #include "util/sys_time.h"
-#include "util/geometry.h"
+#include "util/angle_math.h"
 
 typedef struct PACKED _SkillGetBallInput
 {
@@ -18,12 +19,17 @@ typedef struct PACKED _SkillGetBallInput
 
 	uint8_t rotationSpeed;
 	uint8_t dockSpeed;
+	uint8_t aimSpeed;
 } SkillGetBallInput;
 
 static struct _SkillGetBall
 {
 	uint8_t state;
 	uint32_t stopBeginTime;
+	uint32_t kickCounterStart;
+	uint32_t numGoalDetections;
+	uint32_t aimStartTime;
+	float aimTargetAngle;
 } getBall;
 
 static void getBallInit(const SkillInput *pInput);
@@ -33,6 +39,9 @@ static void getBallStateCenter(const SkillInput *pInput, SkillOutput *pOutput);
 static void getBallStateApproach(const SkillInput *pInput, SkillOutput *pOutput);
 static void getBallStateDocking(const SkillInput *pInput, SkillOutput *pOutput);
 static void getBallStateStop(const SkillInput *pInput, SkillOutput *pOutput);
+static void getBallStateSecure(const SkillInput *pInput, SkillOutput *pOutput);
+static void getBallStateFindGoal(const SkillInput *pInput, SkillOutput *pOutput);
+static void getBallStateAim(const SkillInput *pInput, SkillOutput *pOutput);
 
 SkillInstance skillGetBall = { &getBallInit, &getBallRun, 0 };
 
@@ -41,6 +50,9 @@ SkillInstance skillGetBall = { &getBallInit, &getBallRun, 0 };
 #define STATE_APPROACH	2
 #define STATE_DOCKING	3
 #define STATE_STOP		4
+#define STATE_SECURE	5
+#define STATE_FIND_GOAL	6
+#define STATE_AIM		7
 
 static void getBallInit(const SkillInput *pInput)
 {
@@ -89,6 +101,15 @@ static void getBallRun(const SkillInput *pInput, SkillOutput *pOutput)
 		case STATE_STOP:
 			getBallStateStop(pInput, pOutput);
 			break;
+		case STATE_SECURE:
+			getBallStateSecure(pInput, pOutput);
+			break;
+		case STATE_FIND_GOAL:
+			getBallStateFindGoal(pInput, pOutput);
+			break;
+		case STATE_AIM:
+			getBallStateAim(pInput, pOutput);
+			break;
 	}
 }
 
@@ -108,6 +129,11 @@ static void getBallStateRotate(const SkillInput *pInput, SkillOutput *pOutput)
 
 	if(isfinite(pInput->pSensors->ball.pos[0]))
 	{
+		float orientationToBall = Vector2fLookAtGetAngle(Vector2fFromData(pInput->pState->pos), Vector2fFromData(pInput->pSensors->ball.pos));
+		float orientDiff = AngleDiffAbs(pInput->pState->pos[2], orientationToBall);
+
+//		float distanceToBall = GeometryDistanceBetweenTwoPoints(GeometryVector2f(pInput->pState->pos), GeometryVector2f(pInput->pSensors->ball.pos));
+
 		if(pGet->searchRadius > 0)
 		{
 			Vector2f origin;
@@ -123,14 +149,14 @@ static void getBallStateRotate(const SkillInput *pInput, SkillOutput *pOutput)
 				origin.y = pGet->searchOrigin[1] * 0.001f;
 			}
 
-			float distanceToBall = GeometryDistanceBetweenTwoPoints(origin, GeometryVector2f(pInput->pSensors->ball.pos));
+			float distanceToBall = Vector2fGetDistanceBetween(origin, Vector2fFromData(pInput->pSensors->ball.pos));
 			if(distanceToBall < pGet->searchRadius*0.001f)
 			{
 				getBall.state = STATE_CENTER;
 				pOutput->drive.localVel[2] = 0.0f;
 			}
 		}
-		else
+		else if(orientDiff < AngleDeg2Rad(15.0f)/* && distanceToBall < 10.0f*/)
 		{
 			getBall.state = STATE_CENTER;
 			pOutput->drive.localVel[2] = 0.0f;
@@ -153,13 +179,13 @@ static void getBallStateCenter(const SkillInput *pInput, SkillOutput *pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
 	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
 
-	float targetOrientation = GeometryLookAt(GeometryVector2f(pInput->pState->pos), GeometryVector2f(pInput->pSensors->ball.pos));
+	float targetOrientation = Vector2fLookAtGetAngle(Vector2fFromData(pInput->pState->pos), Vector2fFromData(pInput->pSensors->ball.pos));
 
 	pOutput->drive.localVel[0] = 0.0f;
 	pOutput->drive.localVel[1] = 0.0f;
 	pOutput->drive.pos[2] = targetOrientation;
 
-	if(GeometryAngleDiffAbs(pInput->pState->pos[2],  targetOrientation) < GeometryDeg2Rad(10.0f))
+	if(AngleDiffAbs(pInput->pState->pos[2],  targetOrientation) < AngleDeg2Rad(10.0f))
 	{
 		getBall.state = STATE_APPROACH;
 	}
@@ -177,18 +203,18 @@ static void getBallStateApproach(const SkillInput *pInput, SkillOutput *pOutput)
 
 	// focus ball
 	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
-	float targetOrientation = GeometryLookAt(GeometryVector2f(pInput->pState->pos), GeometryVector2f(pInput->pSensors->ball.pos));
+	float targetOrientation = Vector2fLookAtGetAngle(Vector2fFromData(pInput->pState->pos), Vector2fFromData(pInput->pSensors->ball.pos));
 	pOutput->drive.pos[2] = targetOrientation;
 
 	// drive towards ball
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
 	pOutput->drive.localVel[0] = 0.0f;
 
-	float curSpeed = GeometryNorm(GeometryVector2f(pInput->pState->vel));
+	float curSpeed = Vector2fGetLength(Vector2fFromData(pInput->pState->vel));
 	float brakeTime = curSpeed / pOutput->drive.limits.accMaxXY;
 	float brakeDistance = 0.5f*curSpeed*brakeTime;
 
-	float distanceToBall = GeometryDistanceBetweenTwoPoints(GeometryVector2f(pInput->pState->pos), GeometryVector2f(pInput->pSensors->ball.pos));
+	float distanceToBall = Vector2fGetDistanceBetween(Vector2fFromData(pInput->pState->pos), Vector2fFromData(pInput->pSensors->ball.pos));
 
 	if(distanceToBall < brakeDistance + 0.3f)
 	{
@@ -222,19 +248,145 @@ static void getBallStateDocking(const SkillInput *pInput, SkillOutput *pOutput)
 
 	// focus ball
 	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
-	float targetOrientation = GeometryLookAt(GeometryVector2f(pInput->pState->pos), GeometryVector2f(pInput->pSensors->ball.pos));
+	float targetOrientation = Vector2fLookAtGetAngle(Vector2fFromData(pInput->pState->pos), Vector2fFromData(pInput->pSensors->ball.pos));
 	pOutput->drive.pos[2] = targetOrientation;
 
 	if(pInput->pSensors->ir.interrupted)
 	{
-		getBall.state = STATE_STOP;
 		getBall.stopBeginTime = SysTimeUSec();
+
+		if(pGet->aimSpeed)
+			getBall.state = STATE_SECURE;
+		else
+			getBall.state = STATE_STOP;
 	}
 	else
 	{
 		pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
-		pOutput->drive.localVel[0] = 0.0;
+		pOutput->drive.localVel[0] = 0.0f;
 		pOutput->drive.localVel[1] = ((float)pGet->dockSpeed)*(GLOBAL_POS_MAX_VEL_XY/255.0f);
+	}
+}
+
+// Dribble with active dribbler to secure ball
+static void getBallStateSecure(const SkillInput *pInput, SkillOutput *pOutput)
+{
+	SkillGetBallInput* pGet = (SkillGetBallInput*)pInput->pData;
+
+	if(!isfinite(pInput->pSensors->ball.pos[0]))
+	{
+		getBall.state = STATE_ROTATE;
+		return;
+	}
+
+	uint32_t timeSinceStartMs = (SysTimeUSec() - getBall.stopBeginTime) / 1000;
+
+	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
+	pOutput->drive.modeW = DRIVE_MODE_LOCAL_VEL;
+
+	pOutput->drive.localVel[0] = 0.0f;
+	pOutput->drive.localVel[1] = ((float)pGet->dockSpeed)*(GLOBAL_POS_MAX_VEL_XY/255.0f);
+	pOutput->drive.localVel[2] = 0.0f;
+
+	if(timeSinceStartMs < 200)
+	{
+		// enable dribbler
+		SkillBasicsParseKDInput(pInput, &pGet->kd, pOutput);
+
+		// move forward, no more ball focus
+		pOutput->drive.localVel[0] = 0.0f;
+		pOutput->drive.localVel[1] = ((float)pGet->dockSpeed)*(GLOBAL_POS_MAX_VEL_XY/255.0f);
+		pOutput->drive.localVel[2] = 0.0f;
+	}
+	else
+	{
+		// now find the goal
+		getBall.kickCounterStart = pInput->pSensors->kicker.kickCounter;
+		getBall.numGoalDetections = 0;
+		getBall.state = STATE_FIND_GOAL;
+	}
+}
+
+static void getBallStateFindGoal(const SkillInput *pInput, SkillOutput *pOutput)
+{
+	SkillGetBallInput* pGet = (SkillGetBallInput*)pInput->pData;
+
+	if(!isfinite(pInput->pSensors->ball.pos[0]))
+	{
+		getBall.state = STATE_ROTATE;
+		return;
+	}
+
+	// enable dribbler
+	SkillBasicsParseKDInput(pInput, &pGet->kd, pOutput);
+
+	// rotate slowly
+	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
+	pOutput->drive.modeW = DRIVE_MODE_LOCAL_VEL;
+
+	pOutput->drive.localVel[0] = 0.0f;
+	pOutput->drive.localVel[1] = 0.0f;
+	pOutput->drive.localVel[2] = ((float)pGet->aimSpeed)*(GLOBAL_POS_MAX_VEL_W/255.0f);
+
+	uint8_t goalFound = pInput->pSensors->pointDist.validColumns > 10 && pInput->pSensors->pointDist.isMostlyWhite
+			&& pInput->pSensors->pointDist.updated;
+
+	if(goalFound)
+	{
+//		float goalCenterAngleRelative = 0.5f*(pInput->pSensors->goal.rightAngle + pInput->pSensors->goal.leftAngle);
+		float orientationAtFrameTime = pInput->pState->pos[2];// - pInput->pState->vel[2] * ((SysTimeUSec() - pInput->pSensors->goal.time) * 1e-6f) * 0.5f;
+
+		getBall.aimTargetAngle = orientationAtFrameTime/* - goalCenterAngleRelative*/;
+		getBall.numGoalDetections++;
+	}
+
+	//if(getBall.numGoalDetections >= 3 || (getBall.numGoalDetections > 0 && pInput->pSensors->goal.updated && !goalFound))
+	if(getBall.numGoalDetections > 0)
+	{
+		getBall.aimStartTime = SysTimeUSec();
+		getBall.state = STATE_AIM;
+	}
+}
+
+static void getBallStateAim(const SkillInput *pInput, SkillOutput *pOutput)
+{
+	SkillGetBallInput* pGet = (SkillGetBallInput*)pInput->pData;
+
+//	if(!isfinite(pInput->pSensors->ball.pos[0]))
+//	{
+//		getBall.state = STATE_ROTATE;
+//		return;
+//	}
+
+	uint8_t goalFound = pInput->pSensors->pointDist.validColumns > 10 && pInput->pSensors->pointDist.isMostlyWhite
+			&& pInput->pSensors->pointDist.updated;
+
+	// refresh target angle whenever the robot stands still
+	if(fabsf(pInput->pLastCtrlRef->trajVelLocal[2]) < 0.01f && goalFound)
+	{
+//		float goalCenterAngleRelative = 0.5f*(pInput->pSensors->goal.rightAngle + pInput->pSensors->goal.leftAngle);
+//		float orientationAtFrameTime = pInput->pState->pos[2];
+//
+//		getBall.aimTargetAngle = orientationAtFrameTime - goalCenterAngleRelative;
+	}
+
+	// enable dribbler
+	SkillBasicsParseKDInput(pInput, &pGet->kd, pOutput);
+
+	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
+	pOutput->drive.pos[2] = getBall.aimTargetAngle;
+
+	// Shoot after one second of aiming
+	if(SysTimeUSec() - getBall.aimStartTime > 1000000)
+	{
+		pOutput->kicker.speed = 5.0f;
+		pOutput->kicker.mode = KICKER_MODE_ARM;
+		pOutput->kicker.device = KICKER_DEVICE_STRAIGHT;
+	}
+
+	if(getBall.kickCounterStart != pInput->pSensors->kicker.kickCounter)
+	{
+		getBall.state = STATE_STOP;
 	}
 }
 
@@ -254,7 +406,7 @@ static void getBallStateStop(const SkillInput *pInput, SkillOutput *pOutput)
 	pOutput->drive.localVel[1] = ((float)pGet->dockSpeed)*(GLOBAL_POS_MAX_VEL_XY/255.0f);
 	pOutput->drive.localVel[2] = 0.0f;
 
-	if(timeSinceStartMs < 200)
+	if(timeSinceStartMs < 300)
 	{
 		// enable dribbler
 		SkillBasicsParseKDInput(pInput, &pGet->kd, pOutput);

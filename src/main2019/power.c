@@ -224,7 +224,7 @@ void PowerTask(void* params)
 					{
 						RobotImplBuzzerPlay(BUZZ_DOUBLE_SLOW);
 
-						chThdSleepUntil(extShutdownStart + S2ST(15));
+						chThdSleepUntil(extShutdownStart + S2ST(2));
 
 						RobotImplBuzzerPlay(BUZZ_TADA);
 					}

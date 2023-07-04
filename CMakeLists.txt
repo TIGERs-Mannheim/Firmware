@@ -99,3 +99,13 @@ if(OPENOCD)
         DEPENDS ${bs2018_EXECS}
     )
 endif()
+
+include(ExternalProject)
+ExternalProject_Add(tests
+    PREFIX tests
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests
+    BINARY_DIR ${CMAKE_BINARY_DIR}/tests/build
+    BUILD_ALWAYS 1
+    EXCLUDE_FROM_ALL 1
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+)

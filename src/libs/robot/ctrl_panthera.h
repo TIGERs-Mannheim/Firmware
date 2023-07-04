@@ -37,6 +37,8 @@ typedef struct _CtrlPantheraConfigCtrl
 		float k;
 		float maxCentrifugalAcc;
 	} velW;
+
+	float dribblerCurrent2Acc;
 } CtrlPantheraConfigCtrl;
 
 typedef struct _CtrlPantheraModelConfig

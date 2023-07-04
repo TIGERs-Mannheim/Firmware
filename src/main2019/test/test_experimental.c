@@ -633,3 +633,92 @@ void TestDribbleRotation(float dribblerCurrent, float dribblerSpeedRPM)
 
 	TestModeExit();
 }
+
+void TestBatteryDropUnderLoad()
+{
+	const float testVoltage_V = 3.2f;
+
+	EMAFilter current;
+	EMAFilter voltage;
+
+	EMAFilterInit(&current, 0.99f);
+	EMAFilterInit(&voltage, 0.99f);
+
+	float avgMotorCur_A[4];
+
+	ConsolePrint("Testing battery voltage drop under load\r\n");
+
+	if(power.usbPowered)
+	{
+		ConsolePrint("Test cannot be performed in USB powered mode!\r\n");
+		return;
+	}
+
+	TestModeStartup();
+
+	for(uint8_t id = 0; id < 4; id++)
+		MotorsSetOff(id);
+
+	voltage.value = power.vBat;
+	current.value = power.iCur;
+
+	for(uint32_t i = 0; i < 1000; i++)
+	{
+		EMAFilterUpdate(&voltage, power.vBat);
+		EMAFilterUpdate(&current, power.iCur);
+		chThdSleepMilliseconds(1);
+	}
+
+	float initialVoltage_V = voltage.value;
+	float initialCurrent_A = current.value;
+
+	for(uint8_t id = 0; id < 4; id++)
+	{
+		MotorsSetElectricalAngle(id, 0, testVoltage_V);
+		avgMotorCur_A[id] = 0.0f;
+	}
+
+	chThdSleepMilliseconds(500);
+
+	voltage.value = power.vBat;
+	current.value = power.iCur;
+
+	for(uint32_t i = 0; i < 1000; i++)
+	{
+		EMAFilterUpdate(&voltage, power.vBat);
+		EMAFilterUpdate(&current, power.iCur);
+		for(uint8_t id = 0; id < 4; id++)
+		{
+			avgMotorCur_A[id] += motors.motor[id].avgCurrentDQ1ms[0];
+		}
+
+		chThdSleepMilliseconds(1);
+	}
+
+	for(uint8_t id = 0; id < 4; id++)
+	{
+		avgMotorCur_A[id] /= 1000.0f;
+	}
+
+	for(uint8_t id = 0; id < 4; id++)
+		MotorsSetOff(id);
+
+	float loadCurrent_A = current.value;
+	float dischageRating_C = loadCurrent_A/1.3f;
+	float internalResistance_R = (initialVoltage_V - voltage.value)/loadCurrent_A;
+	float normInternalR_R = internalResistance_R / dischageRating_C;
+	float normInternalCellR_R = normInternalR_R / (float)power.batCells;
+
+	ConsolePrint("Initial:    %.3fV, %.3fA\r\n", initialVoltage_V, initialCurrent_A);
+	ConsolePrint("Under load: %.3fV, %.3fA\r\n", voltage.value, loadCurrent_A);
+	ConsolePrint("Voltage drop: %.3fV\r\n", initialVoltage_V - voltage.value);
+	ConsolePrint("Discharge C (@1.3Ah): %.3f\r\n", loadCurrent_A/1.3f);
+	ConsolePrint("Internal resistance:\r\n");
+	ConsolePrint("At load: %.3fR, 1C: %.3fmR, 1C single-cell: %.3fmR\r\n", internalResistance_R, normInternalR_R*1e3f, normInternalCellR_R*1e3f);
+	for(uint8_t id = 0; id < 4; id++)
+	{
+		ConsolePrint("Avg. motor current: %.3fA\r\n", avgMotorCur_A[id]);
+	}
+
+	TestModeExit();
+}

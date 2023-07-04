@@ -13,8 +13,7 @@
 #include "dribbler_motor.h"
 
 DribblerCtrlData dribblerCtrl = {
-	.currentOffset = 10837,
-	.currentDirection = 1
+	.currentOffset = 10837
 };
 
 // forward order 3 2 6 4 5 1   3 2 6 4 5 1
@@ -37,7 +36,13 @@ void DribblerCtrlPerPWMCycle()
 	// current measurements
 	int32_t avgCurrent_U12_0 = adc.dmaData[0];
 	int32_t avgCurrent_S16_0 = ((curMult_Q3_15 * avgCurrent_U12_0) >> 15);
-	int32_t currentQ_S16_0 = (avgCurrent_S16_0 - dribblerCtrl.currentOffset)*dribblerCtrl.currentDirection;
+	int32_t currentQ_S16_0 = avgCurrent_S16_0 - dribblerCtrl.currentOffset;
+
+	// Small EMA filter simulates inductance behavior
+	dribblerCtrl.filtOutVoltage = (3*dribblerCtrl.filtOutVoltage + data.motor.Udq[1]) >> 2;
+
+	if(dribblerCtrl.filtOutVoltage < 0)
+		currentQ_S16_0 *= -1;
 
 	data.sensors.adc.currentUVW_S15_15[0] = 0;
 	data.sensors.adc.currentUVW_S15_15[1] = 0;
@@ -70,8 +75,6 @@ void DribblerCtrlPerPWMCycle()
 		int8_t hallDirMult = hallDir[dribblerCtrl.lastHallPos][hallPos];
 		dribblerCtrl.lastHallPos = hallPos;
 
-		dribblerCtrl.currentDirection = hallDirMult;
-
 		if(hallDirMult == 0)
 		{
 			++data.sensors.hall.invalidTransitions;
@@ -91,6 +94,7 @@ void DribblerCtrlPerPWMCycle()
 	if(data.motor.mode == MOTOR_MODE_OFF)
 	{
 		dribblerCtrl.currentOffset = (avgCurrent_S16_0 + 7*dribblerCtrl.currentOffset) >> 3;
+		data.sensors.adc.currentOffset_S16_0 = dribblerCtrl.currentOffset;
 	}
 
 	// Control
@@ -263,14 +267,42 @@ void DribblerCtrlUpdate()
 				data.ctrl.speed.outputMax = q_S12_0;
 			}
 
-			// encDeltaSetpoint is used as hall speed setpoint
-			PICtrlS12Setpoint(&data.ctrl.speed, data.command.encDeltaSetpoint);
-			PICtrlS12Enable(&data.ctrl.speed, 1);
-			PICtrlS12Update(&data.ctrl.speed, modelSpeed_S15_0);
+			if(data.command.encDeltaSetpoint > -50 && data.command.encDeltaSetpoint < 50)
+			{
+				// Setpoint close to zero, spin down to zero and go to voltage mode
+				if(modelSpeed_S15_0 > -50 && modelSpeed_S15_0 < 50)
+				{
+					// Low speed, switch to constant voltage
+					data.motor.Udq[1] = 0;
 
-			// Apply output to Q current controller input
-			PICtrlS12Setpoint(&data.ctrl.currentQ, data.ctrl.speed.output);
-			PICtrlS12Enable(&data.ctrl.currentQ, 1);
+					PICtrlS12Enable(&data.ctrl.currentQ, 0);
+
+					data.ctrl.speed.output = (data.sensors.adc.currentDQ_S16_0[1]*24855) >> 16;
+					data.ctrl.currentQ.output = data.motor.Udq[1] >> 3;
+				}
+				else
+				{
+					// encDeltaSetpoint is used as hall speed setpoint
+					PICtrlS12Setpoint(&data.ctrl.speed, 0);
+					PICtrlS12Enable(&data.ctrl.speed, 1);
+					PICtrlS12Update(&data.ctrl.speed, modelSpeed_S15_0);
+
+					// Apply output to Q current controller input
+					PICtrlS12Setpoint(&data.ctrl.currentQ, data.ctrl.speed.output);
+					PICtrlS12Enable(&data.ctrl.currentQ, 1);
+				}
+			}
+			else
+			{
+				// encDeltaSetpoint is used as hall speed setpoint
+				PICtrlS12Setpoint(&data.ctrl.speed, data.command.encDeltaSetpoint);
+				PICtrlS12Enable(&data.ctrl.speed, 1);
+				PICtrlS12Update(&data.ctrl.speed, modelSpeed_S15_0);
+
+				// Apply output to Q current controller input
+				PICtrlS12Setpoint(&data.ctrl.currentQ, data.ctrl.speed.output);
+				PICtrlS12Enable(&data.ctrl.currentQ, 1);
+			}
 		}
 		break;
 		default:

@@ -14,11 +14,12 @@ typedef struct _DribblerCtrlData
 	uint8_t lastHallPos;
 
 	int32_t currentOffset;
-	int32_t currentDirection;
 
 	uint8_t sampleCounter;
 
 	int32_t voltageQSum;
+
+	int32_t filtOutVoltage;
 } DribblerCtrlData;
 
 extern DribblerCtrlData dribblerCtrl;

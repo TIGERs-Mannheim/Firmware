@@ -92,6 +92,7 @@ static CtrlPantheraConfigCtrl configCtrl = {
 	.posXY = { 8.0f, 1.0f, 0.05f },
 	.posW = { 4.0f, 8.0f, 0.05f },
 	.velW = { 0.0f, 2.0f },
+	.dribblerCurrent2Acc = 0.0f,
 };
 
 void RobotImplInit()
@@ -308,10 +309,12 @@ void RobotImplSetLEDs(uint8_t state)
 	}
 }
 
-void RobotImplExtSendMatchFeedback(const SystemMatchFeedback* pFeedback)
+int16_t RobotImplExtSendPacket(PacketHeader* pHeader, const void* _pData, uint16_t dataLength)
 {
-	PacketHeader header;
-	header.section = SECTION_SYSTEM;
-	header.cmd = CMD_SYSTEM_MATCH_FEEDBACK;
-	ExtSendPacket(&header, pFeedback, sizeof(SystemMatchFeedback));
+	return ExtSendPacket(pHeader, _pData, dataLength);
+}
+
+void RobotImplSetEnabledDetectors(uint32_t detectors)
+{
+	(void)detectors;
 }

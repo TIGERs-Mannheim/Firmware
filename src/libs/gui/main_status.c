@@ -31,6 +31,7 @@ static struct _handles
 	GHandle hCharged;
 	GHandle hVersion;
 	GHandle hSumatraStatus;
+	GHandle hExtUpdateProgress;
 
 	GTimer flashTimer;
 
@@ -165,8 +166,13 @@ GHandle MainStatusCreate(MainStatusKickerDischargeCallback dischageCallback, int
 
 	static char versionBuf[48];
 	snprintf(versionBuf, 48, "Firmware: %s", VersionGetString());
-	GWidgetInit versionInit = { { 20, 50, 200, 20, TRUE, hKickerCont }, versionBuf, 0, 0, 0 };
+	GWidgetInit versionInit = { { 10, 40, 230, 20, TRUE, hKickerCont }, versionBuf, 0, 0, 0 };
 	handles.hVersion = gwinLabelCreate(0, &versionInit);
+	gwinSetFont(handles.hVersion, gdispOpenFont("DejaVuSans10"));
+
+	GWidgetInit updateProgInit = { { 10, 60, 230, 20, FALSE, hKickerCont }, "", 0, 0, 0 };
+	handles.hExtUpdateProgress = gwinLabelCreate(0, &updateProgInit);
+	gwinSetFont(handles.hExtUpdateProgress, gdispOpenFont("DejaVuSans10"));
 
 	GWidgetInit disInit = { { 5, 80, 230, 40, TRUE, hKickerCont }, "Discharge", 0, 0, 0 };
 	handles.hDischarge = gwinButtonCreate(0, &disInit);
@@ -185,6 +191,7 @@ void MainStatusKdUpdate(PresenterMainStatus* pFb)
 	static char chg[10];
 	static char ir[10];
 	static char ir2[10];
+	static char up[80];
 
 	if(pFb->power.usbPowered)
 	{
@@ -254,6 +261,7 @@ void MainStatusKdUpdate(PresenterMainStatus* pFb)
 		{
 			gtimerStart(&handles.flashTimer, &flashFunc, 0, TRUE, 150);
 			gwinSetVisible(handles.hVersion, FALSE);
+			gwinSetVisible(handles.hExtUpdateProgress, FALSE);
 		}
 	}
 	else
@@ -261,6 +269,17 @@ void MainStatusKdUpdate(PresenterMainStatus* pFb)
 		gtimerStop(&handles.flashTimer);
 		gwinSetVisible(handles.hCharged, FALSE);
 		gwinSetVisible(handles.hVersion, TRUE);
+
+		if(pFb->pExtUpdateProgress && pFb->pExtUpdateProgress->updateInProgress)
+		{
+			snprintf(up, sizeof(up), "RPi: %s", pFb->pExtUpdateProgress->status);
+			gwinSetText(handles.hExtUpdateProgress, up, FALSE);
+			gwinSetVisible(handles.hExtUpdateProgress, TRUE);
+		}
+		else
+		{
+			gwinSetVisible(handles.hExtUpdateProgress, FALSE);
+		}
 	}
 }
 

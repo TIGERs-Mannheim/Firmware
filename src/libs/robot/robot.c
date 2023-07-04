@@ -16,6 +16,7 @@
 #include "util/boot.h"
 #include "robot/ctrl_panthera.h"
 #include "util/angle_math.h"
+#include "util/vector.h"
 
 Robot robot;
 
@@ -120,6 +121,9 @@ void RobotTask(void* params)
 
 		// get skill data, parse flags, read vision pos (if available)
 		parseMatchCtrl();
+
+		// Check if a new controller is selected
+		CtrlCheckControllerChange(&robot.ctrlOutput);
 
 		uint32_t tInput = SysTimeCycleCounter();
 		robot.performance.inputTime = SysTimeCycleCounterDiffUSec(tStart, tInput);
@@ -481,27 +485,36 @@ static void sendMatchFeedback()
 		feedback.curVelocity[2] = SYSTEM_MATCH_FEEDBACK_UNUSED_FIELD;
 	}
 
-	uint32_t ballPosAgeMs = (SysTimeUSec() - robot.sensors.ball.time + 500)/1000;
-	if(ballPosAgeMs > 255 || isnan(robot.sensors.ball.pos[0]) || isnan(robot.sensors.ball.pos[1]))
+	if(robot.state.ballIrState == 2)
 	{
-		ballPosAgeMs = 255;
-		feedback.ballPosition[0] = SYSTEM_MATCH_FEEDBACK_UNUSED_FIELD;
-		feedback.ballPosition[1] = SYSTEM_MATCH_FEEDBACK_UNUSED_FIELD;
+		float ballPosGlobal[2];
+		CtrlUtilTurnLocal2Global(robot.state.pos[2], robot.state.ballIrPos[0]*0.001f, robot.state.ballIrPos[1]*0.001f + robot.aux.physical.dribblerDistance, ballPosGlobal, ballPosGlobal+1);
+		feedback.ballPosition[0] = (int16_t)(ballPosGlobal[0] + robot.state.pos[0] * 1000.0f);
+		feedback.ballPosition[1] = (int16_t)(ballPosGlobal[1] + robot.state.pos[1] * 1000.0f);
+		feedback.ballPosAge = 0;
 	}
 	else
 	{
-		feedback.ballPosition[0] = (int16_t)(robot.sensors.ball.pos[0]*1000.0f);
-		feedback.ballPosition[1] = (int16_t)(robot.sensors.ball.pos[1]*1000.0f);
-	}
+		uint32_t ballPosAgeMs = (SysTimeUSec() - robot.sensors.ball.time + 500)/1000;
+		if(ballPosAgeMs > 255 || isnan(robot.sensors.ball.pos[0]) || isnan(robot.sensors.ball.pos[1]))
+		{
+			ballPosAgeMs = 255;
+			feedback.ballPosition[0] = SYSTEM_MATCH_FEEDBACK_UNUSED_FIELD;
+			feedback.ballPosition[1] = SYSTEM_MATCH_FEEDBACK_UNUSED_FIELD;
+		}
+		else
+		{
+			feedback.ballPosition[0] = (int16_t)(robot.sensors.ball.pos[0]*1000.0f);
+			feedback.ballPosition[1] = (int16_t)(robot.sensors.ball.pos[1]*1000.0f);
+		}
 
-	feedback.ballPosAge = ballPosAgeMs;
+		feedback.ballPosAge = ballPosAgeMs;
+	}
 
 	PacketHeader header;
 	header.section = SECTION_SYSTEM;
 	header.cmd = CMD_SYSTEM_MATCH_FEEDBACK;
 	NetworkSendPacket(&header, (uint8_t*) &feedback, sizeof(SystemMatchFeedback));
-
-	RobotImplExtSendMatchFeedback(&feedback);
 }
 
 static void clearUpdateFlags()

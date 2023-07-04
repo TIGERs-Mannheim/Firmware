@@ -157,6 +157,8 @@ void USART1SendFeedback()
 	miso.avgCurrentDQ[0] = adc.avgCurrentDQ_S14_0[0];
 	miso.avgCurrentDQ[1] = adc.avgCurrentDQ_S14_0[1];
 
+	miso.currentOffset = data.sensors.adc.currentOffset_S16_0;
+
 	miso.avgVoltageDQ[0] = data.ctrl.avgVoltageDQ[0];
 	miso.avgVoltageDQ[1] = data.ctrl.avgVoltageDQ[1];
 
@@ -184,6 +186,9 @@ void USART1SendFeedback()
 
 	if(data.comm.timeout)
 		miso.flags |= MOTOR_EXCHANGE_MISO_FLAG_RX_TIMEOUT;
+
+	if(data.sensors.adc.currentOffset_S16_0 < 5000 || data.sensors.adc.currentOffset_S16_0 > 15000)
+		miso.flags |= MOTOR_EXCHANGE_MISO_FLAG_CUR_OFFSET_ABNORMAL;
 
 	if(data.command.recordMode)
 	{

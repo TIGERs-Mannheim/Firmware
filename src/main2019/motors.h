@@ -55,6 +55,7 @@ typedef struct _MotorsSingle
 	float avgCurrentUVW1ms[3];
 	float avgCurrentDQ1ms[2];
 	float avgVoltageDQ1ms[2];
+	float currentOffset;
 	float encoderVelocity; // motor [rad/s]
 	float hallVelocity; // motor [rad/s]
 	uint32_t rxTime;

@@ -16,6 +16,7 @@ list(APPEND robot_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/skill_intercept_ball.c
     ${CMAKE_CURRENT_LIST_DIR}/skill_penalty_shoot.c
     ${CMAKE_CURRENT_LIST_DIR}/skill_sine.c
+    ${CMAKE_CURRENT_LIST_DIR}/skill_tc_2022.c
     ${CMAKE_CURRENT_LIST_DIR}/traj_bang_bang.c
     ${CMAKE_CURRENT_LIST_DIR}/util.c
 )

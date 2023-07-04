@@ -473,7 +473,7 @@ static void processCommand()
 	if(ConsoleCmpCmd("version"))
 	{
 		ConsolePrint(VersionGetString());
-		ConsolePrint("Commit SHA1: %s\r\n", GIT_SHA1);
+		ConsolePrint("\r\nCommit SHA1: %s\r\n", GIT_SHA1);
 		ConsolePrint("Commit Date: %s\r\n", GIT_COMMIT_DATE_ISO8601);
 		ConsolePrint("Checksum: 0x%08X\r\n", BootGetApplicationCRC32());
 	}

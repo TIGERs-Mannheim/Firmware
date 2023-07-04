@@ -120,20 +120,20 @@ float HermiteSplineMaxSecondDerivative(HermiteSpline* pSpline)
  */
 float HermiteSpline2DMaxFirstDerivative(HermiteSpline* pA, HermiteSpline* pB)
 {
-	Vector2f t0 = Vector2fCreate(HermiteSplineFirstDerivative(pA, 0), HermiteSplineFirstDerivative(pB, 0));
-	Vector2f tEnd = Vector2fCreate(HermiteSplineFirstDerivative(pA, pA->tEnd), HermiteSplineFirstDerivative(pB, pB->tEnd));
+	Vector2f t0 = Vector2fFromXY(HermiteSplineFirstDerivative(pA, 0), HermiteSplineFirstDerivative(pB, 0));
+	Vector2f tEnd = Vector2fFromXY(HermiteSplineFirstDerivative(pA, pA->tEnd), HermiteSplineFirstDerivative(pB, pB->tEnd));
 
-	float a = Vector2fLength(t0);
+	float a = Vector2fGetLength(t0);
 	float b = 0.0f;
-	float c = Vector2fLength(tEnd);
+	float c = Vector2fGetLength(tEnd);
 
 	if ((pA->a[3] + pB->a[3]) != 0.0f) // maximum existent?
 	{
 		float t = -(pB->a[2] + pA->a[2]) / ((3 * pB->a[3]) + (3 * pA->a[3])); // time at maximum
 		if ((t > 0) && (t < pA->tEnd))
 		{
-			Vector2f B = Vector2fCreate(HermiteSplineFirstDerivative(pA, t), HermiteSplineFirstDerivative(pB, t));
-			b = Vector2fLength(B);
+			Vector2f B = Vector2fFromXY(HermiteSplineFirstDerivative(pA, t), HermiteSplineFirstDerivative(pB, t));
+			b = Vector2fGetLength(B);
 		}
 	}
 
@@ -155,11 +155,11 @@ float HermiteSpline2DMaxFirstDerivative(HermiteSpline* pA, HermiteSpline* pB)
 float HermiteSpline2DMaxSecondDerivative(HermiteSpline* pA, HermiteSpline* pB)
 {
 	// maximum of second derivative is at begin or end
-	Vector2f t0 = Vector2fCreate(HermiteSplineSecondDerivative(pA, 0), HermiteSplineSecondDerivative(pB, 0));
-	Vector2f tEnd = Vector2fCreate(HermiteSplineSecondDerivative(pA, pA->tEnd), HermiteSplineSecondDerivative(pB, pB->tEnd));
+	Vector2f t0 = Vector2fFromXY(HermiteSplineSecondDerivative(pA, 0), HermiteSplineSecondDerivative(pB, 0));
+	Vector2f tEnd = Vector2fFromXY(HermiteSplineSecondDerivative(pA, pA->tEnd), HermiteSplineSecondDerivative(pB, pB->tEnd));
 
-	float a = Vector2fLength(t0);
-	float b = Vector2fLength(tEnd);
+	float a = Vector2fGetLength(t0);
+	float b = Vector2fGetLength(tEnd);
 
 	if(a > b)
 		return a;
@@ -171,21 +171,21 @@ void HermiteSpline2DGenerate(Vector2f initialPos, Vector2f finalPos, Vector2f in
 		Vector2f finalVelocity, float maxVelocity, float maxAcc, HermiteSpline* pOutX, HermiteSpline* pOutY)
 {
 	// catch some invalid velocities
-	if (Vector2fLength(initialVelocity) > maxVelocity)
+	if (Vector2fGetLength(initialVelocity) > maxVelocity)
 	{
-		maxVelocity = Vector2fLength(initialVelocity);
+		maxVelocity = Vector2fGetLength(initialVelocity);
 	}
 
-	if (Vector2fLength(finalVelocity) > maxVelocity)
+	if (Vector2fGetLength(finalVelocity) > maxVelocity)
 	{
-		maxVelocity = Vector2fLength(finalVelocity);
+		maxVelocity = Vector2fGetLength(finalVelocity);
 	}
 
 //	maxVelocity += 0.1f;
 //	maxAcc +=  0.1f;
 
 	// generate initial guess based on distance and max velocity
-	float d = Vector2fLength(Vector2fSubtract(finalPos, initialPos));
+	float d = Vector2fGetLength(Vector2fSubtract(finalPos, initialPos));
 	// t will always be a too short time, that's good
 	float t = d / maxVelocity;
 	// and this will avoid nulls and NaNs in the following calculation

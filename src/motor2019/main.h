@@ -49,6 +49,7 @@ typedef struct _Data
 
 			int32_t currentUVW_S15_15[3];
 			int32_t currentDQ_S16_0[2];
+			int32_t currentOffset_S16_0;
 		} adc;
 	} sensors;
 

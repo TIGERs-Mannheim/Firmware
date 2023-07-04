@@ -127,11 +127,11 @@ typedef struct PACKED _RobotSensors
 		uint32_t time; // center of frame exposure time
 
 		// all coordinates in map (global) frame
-        float pos[3];
-        float vel[3];
-        float linePos[2];
-        float lineDir[2];
-        uint32_t trackerId;
+		float pos[3];
+		float vel[3];
+		float linePos[2];
+		float lineDir[2];
+		uint32_t trackerId;
 	} ball;
 
 	struct PACKED
@@ -147,6 +147,17 @@ typedef struct PACKED _RobotSensors
 		uint32_t id;		// 0 - 15 yellow IDs, 16 - 31 blue IDs
 		uint32_t flags;		// working blobs, pattern ident system malfunction
 	} pattern;
+
+	struct PACKED
+	{
+		uint32_t updated;
+		uint32_t time;
+
+		uint32_t validColumns;
+		float avgHeight;
+		float avgYBottom;
+		uint32_t isMostlyWhite;
+	} pointDist;
 } RobotSensors;
 
 typedef struct PACKED _RobotAuxData
@@ -300,12 +311,13 @@ typedef struct PACKED _IRData
 
 #define MOTOR_EXCHANGE_MISO_MAX_MEAS 20
 
-#define MOTOR_EXCHANGE_MISO_FLAG_ENCODER_INSTALLED	0x01
-#define MOTOR_EXCHANGE_MISO_FLAG_BREAK_ACTIVE		0x02
-#define MOTOR_EXCHANGE_MISO_FLAG_D_CUR_OVERLOAD		0x04
-#define MOTOR_EXCHANGE_MISO_FLAG_Q_CUR_OVERLOAD		0x08
-#define MOTOR_EXCHANCE_MISO_FLAG_VEL_OVERLOAD		0x10
-#define MOTOR_EXCHANGE_MISO_FLAG_RX_TIMEOUT			0x20
+#define MOTOR_EXCHANGE_MISO_FLAG_ENCODER_INSTALLED		0x01
+#define MOTOR_EXCHANGE_MISO_FLAG_BREAK_ACTIVE			0x02
+#define MOTOR_EXCHANGE_MISO_FLAG_D_CUR_OVERLOAD			0x04
+#define MOTOR_EXCHANGE_MISO_FLAG_Q_CUR_OVERLOAD			0x08
+#define MOTOR_EXCHANCE_MISO_FLAG_VEL_OVERLOAD			0x10
+#define MOTOR_EXCHANGE_MISO_FLAG_RX_TIMEOUT				0x20
+#define MOTOR_EXCHANGE_MISO_FLAG_CUR_OFFSET_ABNORMAL	0x40
 
 typedef struct PACKED _MotorExchangeMISO
 {
@@ -332,6 +344,7 @@ typedef struct PACKED _MotorExchangeMISO
 	int16_t avgCurrentDQ[2];
 	int16_t avgVoltageDQ[2];
 	int16_t velCtrlOutputCurrent; // [mA]
+	int16_t currentOffset; // [mA], may only update if motors are off
 
 	int16_t currentMeas[MOTOR_EXCHANGE_MISO_MAX_MEAS][2];
 } MotorExchangeMISO;

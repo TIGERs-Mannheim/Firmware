@@ -15,3 +15,4 @@ void TestMotorTraction();
 void TestRotationIdent();
 void TestMotorPhaseResistance(uint8_t motorId);
 void TestDribbleRotation(float dribblerCurrent, float dribblerSpeedRPM);
+void TestBatteryDropUnderLoad();

@@ -108,8 +108,6 @@ void CtrlControl(const RobotCtrlState* pState, const DriveInput* pInput, RobotCt
 	{
 		(*ctrl.pInstance->pControllerFunc)(pState, pInput, pOutput, pRef);
 	}
-
-	CtrlCheckControllerChange(pOutput);
 }
 
 void CtrlUpdateBotId(uint8_t botId)

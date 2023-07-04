@@ -11,6 +11,7 @@
 #include "util/map_to_range.h"
 #include "struct_ids.h"
 #include <math.h>
+#include <util/line.h>
 
 static void init(const float* pDefaultPos);
 static void controller(const RobotCtrlState* pState, const DriveInput* pDrive, RobotCtrlOutput* pOutput, RobotCtrlReference* pReference);
@@ -40,7 +41,7 @@ ConfigFileDesc ctrlPantheraConfigModelDesc =
 	} };
 
 ConfigFileDesc ctrlPantheraConfigCtrlDesc =
-	{ 0, 0, "", 8, (ElementDesc[]) {
+	{ 0, 0, "", 9, (ElementDesc[]) {
 		{ FLOAT, "pos_xy_k", "", "pos/xy/k" },
 		{ FLOAT, "pos_xy_max", "m/s", "pos/xy/max" },
 		{ FLOAT, "pos_xy_ajitter", "", "pos/xy/anti_jitter" },
@@ -49,6 +50,7 @@ ConfigFileDesc ctrlPantheraConfigCtrlDesc =
 		{ FLOAT, "pos_w_ajitter", "", "pos/w/anti_jitter" },
 		{ FLOAT, "vel_w_k", "", "vel/w/k" },
 		{ FLOAT, "vel_w_cent_acc", "m/s^2", "vel/w/cent_acc" },
+		{ FLOAT, "drib_cur2acc", "m/(s^2*A)", "drib/cur2acc" },
 	} };
 
 void CtrlPantheraInit(CtrlPantheraConfigCtrl* pConfigCtrl, CtrlPantheraConfigModel* pConfigModel, FusionEKFConfig* pConfigEkf)
@@ -127,6 +129,8 @@ static void controlXY(const DriveInput* pDrive, const RobotCtrlReference* pRefer
 
 			pOutVel[0] += localPosPidOutput[0];
 			pOutVel[1] += localPosPidOutput[1];
+			pOutAcc[0] *= scale;
+			pOutAcc[1] *= scale;
 		}
 		break;
 		case DRIVE_MODE_LOCAL_VEL:
@@ -164,12 +168,13 @@ static void controlW(const DriveInput* pDrive, const RobotCtrlReference* pRefere
 		case DRIVE_MODE_LOCAL_VEL:
 		{
 			float outScale = 1.0f;
+			float posCtrlOut = 0.0f;
 
 			if(pDrive->modeW == DRIVE_MODE_GLOBAL_POS || pDrive->modeW == DRIVE_MODE_GLOBAL_POS_ASYNC)
 			{
 				// P control on position
 				const float orientError = pReference->trajPos[2] - pState->pos[2];
-				pOutVel[2] += clampf(orientError * ctrlPanthera.pConfigCtrl->posW.k, ctrlPanthera.pConfigCtrl->posW.max);
+				posCtrlOut = clampf(orientError * ctrlPanthera.pConfigCtrl->posW.k, ctrlPanthera.pConfigCtrl->posW.max);
 
 				// gain scheduling based on distance to target orientation
 				outScale = MapToRangef32(0.0f, ctrlPanthera.pConfigCtrl->posW.antiJitterTheshold, 0.0f, 1.0f, fabsf(orientError));
@@ -177,7 +182,7 @@ static void controlW(const DriveInput* pDrive, const RobotCtrlReference* pRefere
 
 			// P control on velocity (based on gyro)
 			const float angVelError = pReference->trajVelLocal[2] - pState->vel[2];
-			pOutVel[2] += angVelError * ctrlPanthera.pConfigCtrl->velW.k * outScale;
+			pOutVel[2] += (posCtrlOut + angVelError * ctrlPanthera.pConfigCtrl->velW.k) * outScale;
 
 			pOutAcc[2] *= outScale;
 		}
@@ -185,6 +190,27 @@ static void controlW(const DriveInput* pDrive, const RobotCtrlReference* pRefere
 		default:
 		{
 			return;
+		}
+	}
+
+	// Compensate acceleration from ball
+	if(pState->ballIrState == 2) // barrier interrupted
+	{
+		// Ball-Dribbler contact point in [m] in local robot frame
+		Vector2f contactPoint = Vector2fFromXY(pState->ballIrPos[0]*1e-3f, pState->ballIrPos[1]*1e-3f + botParams.physical.dribblerDistance - 0.02f);
+		Vector2f tangential = Vector2fGetNormalVector(contactPoint);
+		float distFromCenter = Vector2fGetLength(tangential);
+
+		Vector2f ballAcc = Vector2fFromXY(0.0f, -pState->dribblerCur * ctrlPanthera.pConfigCtrl->dribblerCurrent2Acc);
+
+		if(distFromCenter > 0.0f)
+		{
+			Vector2f tangentialNormalized = Vector2fNormalize(tangential);
+
+			float accTangential = Vector2fDotProduct(ballAcc, tangentialNormalized);
+			float accW = accTangential / distFromCenter;
+
+			pOutAcc[2] += -accW;
 		}
 	}
 }

@@ -490,6 +490,7 @@ static void receiveMotorData(uint32_t motorId)
 		pMotor->avgCurrentDQ1ms[1] = pMotor->miso.avgCurrentDQ[1] * 0.001f;
 		pMotor->avgVoltageDQ1ms[0] = pMotor->miso.avgVoltageDQ[0] * 0.001f;
 		pMotor->avgVoltageDQ1ms[1] = pMotor->miso.avgVoltageDQ[1] * 0.001f;
+		pMotor->currentOffset = pMotor->miso.currentOffset * 0.001f;
 
 		// process speed measurements
 		if(pMotor->miso.hallComTime == INT32_MAX || pMotor->miso.hallComTime == 0)

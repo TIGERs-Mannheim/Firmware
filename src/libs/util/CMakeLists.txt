@@ -23,7 +23,7 @@ list(APPEND util_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/fw_loader_fatfs.c
     ${CMAKE_CURRENT_LIST_DIR}/fw_loader_wifi.c
     ${CMAKE_CURRENT_LIST_DIR}/fw_updater.c
-    ${CMAKE_CURRENT_LIST_DIR}/geometry.c
+    ${CMAKE_CURRENT_LIST_DIR}/line.c
     ${CMAKE_CURRENT_LIST_DIR}/hermite_spline.c
     ${CMAKE_CURRENT_LIST_DIR}/hermite_spline_cubic.c
     ${CMAKE_CURRENT_LIST_DIR}/i2c_soft.c
@@ -42,6 +42,7 @@ list(APPEND util_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/rf_queue.c
     ${CMAKE_CURRENT_LIST_DIR}/signal_statistics.c
     ${CMAKE_CURRENT_LIST_DIR}/sky66112.c
+    ${CMAKE_CURRENT_LIST_DIR}/songs.c
     ${CMAKE_CURRENT_LIST_DIR}/sort.c
     ${CMAKE_CURRENT_LIST_DIR}/spi_low.c
     ${CMAKE_CURRENT_LIST_DIR}/spi_sync.c
@@ -64,3 +65,9 @@ list(APPEND util_SOURCES
 )
 
 list(APPEND util_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/..)
+
+list(APPEND util_TEST_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/arm_atan2_f32.c
+        ${CMAKE_CURRENT_LIST_DIR}/line.c
+        ${CMAKE_CURRENT_LIST_DIR}/vector.c
+)

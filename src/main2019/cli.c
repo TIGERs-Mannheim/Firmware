@@ -790,6 +790,11 @@ static void miscCommands()
 			ConsolePrint("This robot is not listed in the inventory!\r\n");
 		}
 	}
+
+	if(ConsoleCmpCmd("test bat"))
+	{
+		TestBatteryDropUnderLoad();
+	}
 }
 
 static void wifiCommands()
@@ -1045,6 +1050,7 @@ static void motorsCommands()
 		ConsolePrint("CPU: %.3f%%, Temp: %.1fC, vSupply: %.3fV\r\n", pMotor->cpuLoad, pMotor->avgTemperature1ms, pMotor->avgSupplyVoltage1ms);
 		ConsolePrint("vDQ: %.3fV / %.3fV\r\n", pMotor->avgVoltageDQ1ms[0], pMotor->avgVoltageDQ1ms[1]);
 		ConsolePrint("iUVW: %.3fA / %.3fA / %.3fA\r\n", pMotor->avgCurrentUVW1ms[0], pMotor->avgCurrentUVW1ms[1], pMotor->avgCurrentUVW1ms[2]);
+		ConsolePrint("iOffset: %.3fA\r\n", pMotor->currentOffset);
 		ConsolePrint("iDQ: %.3fA / %.3fA\r\n", pMotor->avgCurrentDQ1ms[0], pMotor->avgCurrentDQ1ms[1]);
 		ConsolePrint("Hall Pos: %hu, comTime: %d, invTran: %hu\r\n", (uint16_t) pMotor->miso.hallPos,
 				pMotor->miso.hallComTime, pMotor->miso.hallInvalidTransitions);
@@ -1826,12 +1832,18 @@ static void buzzerCommands()
 	{
 		BuzzerPlay(&buzzSeqEyeFollow);
 	}
+
+	if(ConsoleCmpCmd("buzz mac"))
+	{
+		BuzzerPlay(&buzzSeqMacarena);
+	}
 }
 
 static void robotPiCommands()
 {
 	uint16_t u16;
-	float f32[2];
+	uint32_t u32;
+	float f32[3];
 
 	if(ConsoleCmpCmd("camera config"))
 	{
@@ -1840,7 +1852,7 @@ static void robotPiCommands()
 		ConsolePrint("  Exposure time:    %uus\r\n", robotPi.cameraConfig.expTimeUs);
 		ConsolePrint("Auto white-balance: %s\r\n", robotPi.cameraConfig.wbAutoMode ? "On" : "Off");
 		ConsolePrint("  Red gain:         %.2f\r\n  Blue gain:        %.2f\r\n", robotPi.cameraConfig.wbRedGain, robotPi.cameraConfig.wbBlueGain);
-		ConsolePrint("Preview:            %s\r\n", robotPi.previewConfig.enable ? "On" : "Off");
+		ConsolePrint("Preview:            %s\r\n", robotPi.enablePreview ? "On" : "Off");
 		ConsolePrint("Resolution:         %hu\r\n", robotPi.cameraControl.resolution);
 		ConsolePrint("Recording:          %s\r\n", robotPi.cameraControl.recording ? "On" : "Off");
 	}
@@ -1908,7 +1920,28 @@ static void robotPiCommands()
 	if(ConsoleScanCmd("camera preview %hu", &u16) == 1)
 	{
 		ConsolePrint("Camera preview: %hu\r\n", u16);
-		robotPi.previewConfig.enable = u16;
+		robotPi.enablePreview = u16;
+	}
+
+	if(ConsoleScanCmd("camera steps %X", &u32) == 1)
+	{
+		ConsolePrint("Enabled steps: 0x%08X\r\n", u32);
+		robotPi.enabledSteps = u32;
+	}
+
+	if(ConsoleScanCmd("camera dbg %X %hu", &u32, &u16) == 2)
+	{
+		ConsolePrint("Debug steps: 0x%08X\r\nLevel: %hu\r\n", u32, u16);
+		robotPi.debugSteps = u32;
+		robotPi.debugLevel = u16;
+	}
+
+	if(ConsoleCmpCmd("point dist"))
+	{
+		ConsolePrint("validColumns: %u\r\n", robotPi.pointDistanceSensor.validColumns);
+		ConsolePrint("color: %s\r\n", robotPi.pointDistanceSensor.isMostlyWhite ? "White" : "Black");
+		ConsolePrint("avgYBottom: %.3f\r\n", robotPi.pointDistanceSensor.avgYBottom);
+		ConsolePrint("avgHeight: %.3f\r\n", robotPi.pointDistanceSensor.avgHeight);
 	}
 
 	if(ConsoleScanCmd("camera res %hu", &u16) == 1)
@@ -1927,6 +1960,35 @@ static void robotPiCommands()
 	{
 		RobotPiTriggerImageCapture();
 		ConsolePrint("Triggered camera capture\r\n");
+	}
+
+	if(ConsoleScanCmd("camera col %hu", &u16) == 1)
+	{
+		ConsolePrint("Y: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].y[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].y[1]);
+		ConsolePrint("U: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].u[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].u[1]);
+		ConsolePrint("V: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].v[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].v[1]);
+	}
+
+	uint16_t col[2];
+	if(ConsoleScanCmd("camera col %hu y %hu %hu", &u16, col, col+1) == 3 && u16 < 3)
+	{
+		robotPi.colorClassifierConfig.thresholds[u16].y[0] = col[0];
+		robotPi.colorClassifierConfig.thresholds[u16].y[1] = col[1];
+		ConsolePrint("Y: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].y[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].y[1]);
+	}
+
+	if(ConsoleScanCmd("camera col %hu u %hu %hu", &u16, col, col+1) == 3 && u16 < 3)
+	{
+		robotPi.colorClassifierConfig.thresholds[u16].u[0] = col[0];
+		robotPi.colorClassifierConfig.thresholds[u16].u[1] = col[1];
+		ConsolePrint("U: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].u[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].u[1]);
+	}
+
+	if(ConsoleScanCmd("camera col %hu v %hu %hu", &u16, col, col+1) == 3 && u16 < 3)
+	{
+		robotPi.colorClassifierConfig.thresholds[u16].v[0] = col[0];
+		robotPi.colorClassifierConfig.thresholds[u16].v[1] = col[1];
+		ConsolePrint("V: % 3hu % 3hu\r\n", (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].v[0], (uint16_t)robotPi.colorClassifierConfig.thresholds[u16].v[1]);
 	}
 
 	if(ConsoleCmpCmd("balls"))
@@ -1952,6 +2014,29 @@ static void robotPiCommands()
 					pos[0], pos[1], pos[2],
 					posLocal[0], posLocal[1]);
 		}
+	}
+
+	if(ConsoleCmpCmd("camcalib start"))
+	{
+		robotPi.enabledSteps |= EXT_STEP_MASK_CALIBRATION;
+	}
+
+	if(ConsoleCmpCmd("camcalib stop"))
+	{
+		robotPi.enabledSteps &= ~EXT_STEP_MASK_CALIBRATION;
+	}
+
+	if(ConsoleCmpCmd("camcalib status"))
+	{
+		ConsolePrint("Status: %s\r\nScore: %fm\r\nResolution: %i %i\r\nPrincipal point: %f %f\r\nFocal length: %f\r\nDistortion: %f %f\r\nHeight: %f\r\nRotation: %f %f %f\r\n",
+					 robotPi.cameraCalibration.status,
+					 robotPi.cameraCalibration.score,
+					 robotPi.cameraCalibration.resolutionX, robotPi.cameraCalibration.resolutionY,
+					 robotPi.cameraCalibration.principalPointX, robotPi.cameraCalibration.principalPointY,
+					 robotPi.cameraCalibration.focalLength,
+					 robotPi.cameraCalibration.distortionCoeff0, robotPi.cameraCalibration.distortionCoeff1,
+					 robotPi.cameraCalibration.height,
+					 robotPi.cameraCalibration.rotationY, robotPi.cameraCalibration.rotationP, robotPi.cameraCalibration.rotationR);
 	}
 }
 

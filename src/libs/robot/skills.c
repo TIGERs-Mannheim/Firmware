@@ -14,6 +14,7 @@
 #include "skill_penalty_shoot.h"
 #include "skill_get_ball.h"
 #include "skill_intercept_ball.h"
+#include "skill_tc_2022.h"
 #include "intercom_constants.h"
 #include <string.h>
 
@@ -32,7 +33,11 @@ SkillInstanceId skillInstances[] = {
 	{   9, &skillPenaltyShoot },
 	{  10, &skillLocalForce },
 	{  11, &skillGetBall },
-	{  12, &skillInterceptBall }
+	{  12, &skillInterceptBall },
+	{  14, &skillTc2022 },
+	{  15, &skillTc2022 },
+	{  16, &skillTc2022 },
+	{  17, &skillTc2022 },
 };
 
 void SkillsInit()

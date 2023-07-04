@@ -116,6 +116,8 @@ typedef struct PACKED _PresenterMainStatus
 		uint8_t txDamaged;
 		uint8_t rxDamaged;
 	} barrier;
+
+	const ExtUpdateProgress* pExtUpdateProgress;
 } PresenterMainStatus;
 
 typedef struct PACKED _LogFileTimeSync

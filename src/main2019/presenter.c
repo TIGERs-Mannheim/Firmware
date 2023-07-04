@@ -196,6 +196,7 @@ void PresenterTask(void* params)
 			stat.kicker.max = kicker.config.maxVoltage;
 			stat.kicker.chg = 0.0f;
 			stat.kicker.temp = kicker.tEnv;
+			stat.pExtUpdateProgress = &robotPi.updateProgress;
 			MainStatusKdUpdate(&stat);
 			MainStatusHwIdUpdate(RobotImplGetHardwareId());
 			MainStatusWifiUpdate(&robot.wifiStat);
