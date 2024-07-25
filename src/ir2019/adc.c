@@ -66,7 +66,7 @@ DMA Config:
 
 #include "adc.h"
 #include "usart1.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include <string.h>
 
 #define NUM_BLOCKS 2

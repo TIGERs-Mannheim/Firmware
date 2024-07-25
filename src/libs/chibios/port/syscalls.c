@@ -1,9 +1,4 @@
-/*
- * syscalls.c
- *
- *  Created on: 02.11.2012
- *      Author: AndreR
- */
+#include "syscalls.h"
 
 #include <errno.h>
 #include <sys/stat.h>
@@ -12,6 +7,8 @@
 #include <string.h>
 
 #include "ch.h"
+
+SyscallWriteFunc syscallWriteFunc;
 
 #undef errno
 extern int errno;
@@ -239,9 +236,23 @@ int _wait(int *status)
  */
 int _write(int file, char *ptr, int len)
 {
-	(void)file;
-	(void)ptr;
-	(void)len;
+	if(syscallWriteFunc)
+	{
+		if(file == STDOUT_FILENO)
+		{
+			return (*syscallWriteFunc)(ptr, len);
+		}
+		else if(file == STDERR_FILENO)
+		{
+			const char* pYellow = "\e[33m";
+			const char* pReset = "\e[0m";
+
+			(*syscallWriteFunc)(pYellow, 5);
+			int written = (*syscallWriteFunc)(ptr, len);
+			(*syscallWriteFunc)(pReset, 4);
+			return written;
+		}
+	}
 
 	errno = EBADF;
 	return -1;

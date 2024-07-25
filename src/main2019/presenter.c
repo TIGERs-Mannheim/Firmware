@@ -1,32 +1,22 @@
-/*
- * presenter.c
- *
- *  Created on: 09.01.2019
- *      Author: AndreR
- */
-
 #include "presenter.h"
-#include "hal/tft.h"
-#include "gfx.h"
-#include "util/console.h"
+#include "dev/tft.h"
 #include "robot/network.h"
-#include "power.h"
 #include "util/log_file.h"
 #include "util/network_print.h"
 #include "robot/robot.h"
-#include "kicker.h"
 #include "util/fw_updater.h"
-#include "motors.h"
-#include "ir.h"
-#include "ext.h"
-#include "test/test.h"
-#include "usb/usb_hcd.h"
-#include "usb/usb_msc.h"
-#include "sdcard.h"
+#include "hal/usb/usb_hcd.h"
+#include "hal/usb/usb_msc.h"
+#include "sys/sdcard.h"
 #include "util/bmp.h"
-#include "util/sys_time.h"
-#include "spi4.h"
-#include "robot_pi.h"
+#include "hal/sys_time.h"
+#include "tiger_bot.h"
+#include "dev/imu.h"
+#include "dev/mag.h"
+#include "dev/drib_ir.h"
+#include "dev/motors.h"
+#include "dev/raspberry_pi.h"
+#include "dev/touch.h"
 
 #include "gui/bot_cover.h"
 #include "gui/main_status.h"
@@ -45,9 +35,14 @@
 #include "gui/imu.h"
 #include "gui/dribbler.h"
 
+#include "gfx.h"
+#include "src/ginput/ginput_driver_mouse.h"
+#include "src/gdisp/gdisp_driver.h"
+
+#include <string.h>
 #include <stdio.h>
 
-#define GUI_HEAP_SIZE (19*1024)
+#define GUI_HEAP_SIZE (24*1024)
 memory_heap_t guiHeap;
 uint8_t guiHeapBuffer[GUI_HEAP_SIZE] __attribute__((aligned(sizeof(stkalign_t))));
 
@@ -67,7 +62,6 @@ static int16_t currentWindow = GUI_WINDOW_STATUS;
 
 static void takeScreenshot();
 
-#ifndef ENV_BOOT
 static void usbHcdCallback(USBHCDConnectionEvent* pConEvent)
 {
 	LoggingHCDUpdate(pConEvent);
@@ -82,20 +76,17 @@ static void usbMscCallback(USBMSCEvent* pMscEvent)
 		if(f_stat("autorun_bootloader", 0) == FR_OK)
 		{
 			PresenterShowWindow(GUI_WINDOW_UPDATE);
-			FwUpdaterLoad(FW_UPDATER_SOURCE_USB);
+			FwUpdaterLoad(&tigerBot.fwUpdater, &tigerBot.fwLoaderUsb.source);
 		}
 	}
 }
-#endif
 
 void PresenterInit()
 {
 	chHeapObjectInit(&guiHeap, guiHeapBuffer, GUI_HEAP_SIZE);
 
-#ifndef ENV_BOOT
 	usbHcd.pConCb = &usbHcdCallback;
 	usbMsc.eventCb = &usbMscCallback;
-#endif
 }
 
 void PresenterShowWindow(int16_t newWindow)
@@ -119,6 +110,11 @@ void PresenterTakeScreenshot()
 	handles.takeScreenshot = 1;
 }
 
+static void kickerDischarge()
+{
+	KickerSetChargeMode(&tigerBot.kicker, KICKER_CHG_MODE_AUTO_DISCHARGE);
+}
+
 void PresenterTask(void* params)
 {
 	(void)params;
@@ -135,25 +131,19 @@ void PresenterTask(void* params)
 	gwinSetDefaultColor(White);
 	gdispClear(Black);
 
-#ifndef ENV_BOOT
 	handles.hTopBar = TopBarCreate(0);
-	handles.hWindows[GUI_WINDOW_UPDATE] = FwUpdateCreate(0);
-	handles.hWindows[GUI_WINDOW_STATUS] = MainStatusCreate(&KickerAutoDischarge, GUI_WINDOW_BOT_ID, 1);
+	handles.hWindows[GUI_WINDOW_UPDATE] = FwUpdateCreate();
+	handles.hWindows[GUI_WINDOW_STATUS] = MainStatusCreate(&kickerDischarge, GUI_WINDOW_BOT_ID);
 	handles.hWindows[GUI_WINDOW_WIFI_SETTINGS] = WifiCreate();
 	handles.hWindows[GUI_WINDOW_BOT_ID] = SelectBotIDCreate(GUI_WINDOW_STATUS);  // switch back to status window on selection
 	handles.hWindows[GUI_WINDOW_LOGGING] = LoggingCreate();
-	handles.hWindows[GUI_WINDOW_TEST_KICKER] = TestKickerCreate(&TestScheduleKickerTest);
-	handles.hWindows[GUI_WINDOW_TEST_DRIVE] = TestDriveCreate(&TestScheduleMotorTest);
+	handles.hWindows[GUI_WINDOW_TEST_KICKER] = TestKickerCreate();
+	handles.hWindows[GUI_WINDOW_TEST_DRIVE] = TestDriveCreate();
 	handles.hWindows[GUI_WINDOW_BALL_VIEW] = BallViewCreate();
 	handles.hWindows[GUI_WINDOW_VERSIONS] = VersionsCreate();
 	handles.hWindows[GUI_WINDOW_IR] = IrGuiCreate();
 	handles.hWindows[GUI_WINDOW_IMU] = ImuCreate();
 	handles.hWindows[GUI_WINDOW_DRIBBLER] = DribblerCreate();
-#else
-	handles.hTopBar = TopBarCreate(1);
-	handles.hWindows[GUI_WINDOW_UPDATE] = FwUpdateCreate(1);
-	currentWindow = GUI_WINDOW_UPDATE;
-#endif
 
 	handles.hMenu = MenuCreate(handles.hWindows, 12);
 
@@ -167,54 +157,66 @@ void PresenterTask(void* params)
 
 	while(1)
 	{
+#ifndef ENV_BOOT
 		if(handles.takeScreenshot)
 		{
 			handles.takeScreenshot = 0;
 
 			takeScreenshot();
 		}
+#endif
 
 		GEvent* pEvent = geventEventWait(&gl, 40);
 
 		if(pEvent == 0)
 		{
-#ifndef ENV_BOOT
 			MainStatusConfigNetworkUpdate(&network.config);
 
+			PresenterWifiStat wifiStat;
+			wifiStat.linkDisabled = network.linkDisabled;
+			wifiStat.bsOnline = robot.bsOnline;
+			wifiStat.sumatraOnline = robot.sumatraOnline;
+			wifiStat.updateFreq = 1e6f/tigerBot.radioBot.stats.baseCycleTime_us;
+			wifiStat.visionDelay = robot.sensors.vision.delay;
+			wifiStat.rssi = tigerBot.radioBot.fromBase[tigerBot.radioBot.data.clientId].avgRxRssi_mdBm * 0.001f;
+
+			const Kicker* pKicker = &tigerBot.kicker;
+			const McuDribblerMeasurement* pIr = &devDribIr.meas;
+
 			PresenterMainStatus stat;
-			stat.barrier.level[0] = kicker.vIrOn*1000.0f;
-			stat.barrier.level[1] = kicker.vIrOff*1000.0f;
-			stat.barrier.threshold = kicker.irAutoThreshold*1000.0f;
-			stat.barrier.txDamaged = kicker.barrierTxDamaged;
-			stat.barrier.rxDamaged = kicker.barrierRxDamaged;
-			stat.power.bat = power.vBat;
-			stat.power.min = power.batCells*power.cellMin;
-			stat.power.max = power.batCells*power.cellMax;
-			stat.power.cur = power.iCur;
-			stat.power.usbPowered = power.usbPowered;
-			stat.kicker.cap = kicker.vCap;
-			stat.kicker.max = kicker.config.maxVoltage;
+			stat.barrier.level[0] = pIr->barrierOn_V*1000.0f;
+			stat.barrier.level[1] = pIr->barrierOff_V*1000.0f;
+			stat.barrier.threshold = pKicker->barrier.irAutoThreshold*1000.0f;
+			stat.barrier.txDamaged = pKicker->errorFlags & KICKER_ERROR_IR_TX_DMG;
+			stat.barrier.rxDamaged = pKicker->errorFlags & KICKER_ERROR_IR_RX_DMG;
+			stat.power.bat = tigerBot.powerControl.vBat;
+			stat.power.min = tigerBot.powerControl.batCells*tigerBot.powerControl.cellMin;
+			stat.power.max = tigerBot.powerControl.batCells*tigerBot.powerControl.cellMax;
+			stat.power.cur = tigerBot.powerControl.iCur;
+			stat.power.usbPowered = tigerBot.powerControl.state == POWER_CONTROL_STATE_USB_POWERED;
+			stat.kicker.cap = pKicker->charger.capAvgFast.value;
+			stat.kicker.max = pKicker->pConfig->maxVoltage_V;
 			stat.kicker.chg = 0.0f;
-			stat.kicker.temp = kicker.tEnv;
-			stat.pExtUpdateProgress = &robotPi.updateProgress;
+			stat.kicker.temp = pKicker->charger.boardTemp_degC;
+			stat.pExtUpdateProgress = &tigerBot.robotPi.updateProgress;
 			MainStatusKdUpdate(&stat);
 			MainStatusHwIdUpdate(RobotImplGetHardwareId());
-			MainStatusWifiUpdate(&robot.wifiStat);
+			MainStatusWifiUpdate(&wifiStat);
 
 			// Wifi
 			WifiUpdateConfig(&network.config);
-			WifiUpdateStatus(&robot.wifiStat);
+			WifiUpdateStatus(&wifiStat);
 
 			//Ball Detector
-			BallViewUpdateCamStats(&robotPi.cameraStats);
-			BallViewUpdateDetections(&robotPi.ballDetections);
+			BallViewUpdateCamStats(&tigerBot.robotPi.cameraStats);
+			BallViewUpdateDetections(&tigerBot.robotPi.ballDetections);
 
 			//Versions
-			VersionsUpdateMotor(0, &motors.motor[0].flashResult);
-			VersionsUpdateIr(&ir.flashResult);
-			VersionsUpdateExt(&robotPi.robotPiVersion, ext.installed);
+			VersionsUpdateMotor(0, &devMotors.mcu[0].flashResult);
+			VersionsUpdateIr(&devDribIr.flashResult);
+			VersionsUpdateExt(&tigerBot.robotPi.robotPiVersion, devRaspberryPi.isInstalled);
 
-			if(power.usbPowered)
+			if(tigerBot.powerControl.state == POWER_CONTROL_STATE_USB_POWERED)
 			{
 				MenuSetEnabled(GUI_WINDOW_TEST_DRIVE, FALSE);
 				MenuSetEnabled(GUI_WINDOW_TEST_KICKER, FALSE);
@@ -225,24 +227,30 @@ void PresenterTask(void* params)
 				MenuSetEnabled(GUI_WINDOW_TEST_KICKER, TRUE);
 			}
 
-			FwUpdateAvailableSources(robot.wifiStat.sumatraOnline, usbMsc.fatFs.fs_type, sdCard.fatFs.fs_type);
-#else
-			FwUpdateAvailableSources(0, 0, 0);
-#endif
-
-			FwUpdateStatus(fwUpdater.progresses, fwUpdater.usedPrograms);
+			FwUpdateAvailableSources(usbMsc.fatFs.fs_type, sdCard.fatFs.fs_type);
 
 			// Logging
 			LoggingLogUpdate(&logFile.event);
 
 			// IR Array
-			IrGuiUpdate(&ir.irData, &robot.state);
+			IrGuiData irData;
+			irData.filteredBallPosValid = robot.state.ballState > 0;
+			irData.filteredBallPos_m[0] = robot.state.ballPos[0];
+			irData.filteredBallPos_m[1] = robot.state.ballPos[1];
+			irData.irBallDetected = robot.sensors.ir.ballDetected;
+			irData.irEstimatedBallPosition_mm[0] = robot.sensors.ir.estimatedBallPosition[0];
+			irData.irEstimatedBallPosition_mm[1] = robot.sensors.ir.estimatedBallPosition[1];
+			memcpy(irData.vLateral, devDribIr.vLateral, sizeof(irData.vLateral));
+
+			IrGuiUpdate(&irData);
 
 			// IMU
-			ImuUpdate(spi4.imu.acc, spi4.imu.gyr, spi4.mag.strength, spi4.imu.temp, spi4.mag.temp);
+			ImuUpdate(devImu.meas.acc_mDs2, devImu.meas.gyr_radDs, devMag.meas.strength_uT, devImu.meas.temp_degC, devMag.meas.temp_degC);
 
 			// Dribbler
-			DribblerUpdate(ir.dribblerTemperature, motors.motor[4].avgVoltageDQ1ms[1], motors.motor[4].hallVelocity, motors.motor[4].avgCurrentDQ1ms[1]);
+			DribblerUpdate(&devMotors.mcu[4], &devDribIr, &robot.state, &robot.ctrlRef);
+
+			FwUpdateStatus(&tigerBot.fwUpdater.progress);
 
 			continue;
 		}
@@ -253,6 +261,24 @@ void PresenterTask(void* params)
 			gwinSetVisible(handles.hWindows[currentWindow], FALSE);
 
 			gwinSetVisible(handles.hMenu, TRUE);
+
+			continue;
+		}
+
+		int16_t selectedFwSource = FwUpdateGetBtnClick(pEvent);
+		if(selectedFwSource >= 0)
+		{
+			switch(selectedFwSource)
+			{
+				case GUI_FW_UPDATE_BTN_USB:
+					FwUpdaterLoad(&tigerBot.fwUpdater, &tigerBot.fwLoaderUsb.source);
+					break;
+				case GUI_FW_UPDATE_BTN_SDCARD:
+					FwUpdaterLoad(&tigerBot.fwUpdater, &tigerBot.fwLoaderSdCard.source);
+					break;
+				default:
+					break;
+			}
 
 			continue;
 		}
@@ -277,10 +303,38 @@ void PresenterTask(void* params)
 void PresenterPrintHeapStatus()
 {
 	size_t free;
-	size_t fragments = chHeapStatus(&guiHeap, &free);
+	size_t fragments = chHeapStatus(&guiHeap, &free, 0);
 
-	ConsolePrint("Fragments: %u, Free: %u, Core: %u\r\n", fragments, free, chCoreGetStatusX());
+	printf("Fragments: %u, Free: %u, Core: %u\r\n", fragments, free, chCoreGetStatusX());
 }
+
+void PresenterSendPreviewLineToDisplay(ExtCameraPreviewLine160* pLine)
+{
+	// stream directly to display
+	gfxMutexEnter(&GDISP->mutex);
+
+	*TFT_CMD_REG = 0x2A;
+	*TFT_DATA_REG = 0;
+	*TFT_DATA_REG = 0;
+	*TFT_DATA_REG = 0;
+	*TFT_DATA_REG = 239;
+
+	uint16_t y = pLine->row + 200;
+
+	*TFT_CMD_REG = 0x2B;
+	*TFT_DATA_REG = y >> 8;
+	*TFT_DATA_REG = y & 0xFF;
+	*TFT_DATA_REG = (y+1) >> 8;
+	*TFT_DATA_REG = (y+1) & 0xFF;
+
+	*TFT_CMD_REG = 0x2C;
+
+	for(uint16_t x = 0; x < 160; x++)
+		*TFT_DATA_REG = pLine->data[x];
+
+	gfxMutexExit(&GDISP->mutex);
+}
+
 
 static void takeScreenshot()
 {
@@ -300,7 +354,7 @@ static void takeScreenshot()
 			break;
 		if(fresult != FR_EXIST)
 		{
-			ConsolePrint("Cannot open file: %s   Error: %u\r\n", filename, fresult);
+			printf("Cannot open file: %s   Error: %u\r\n", filename, fresult);
 			return;
 		}
 
@@ -374,5 +428,100 @@ static void takeScreenshot()
 
 	float timeTaken = (SysTimeUSec() - tStart) * 1e-6f;
 
-	ConsolePrint("Screenshot taken: %s (took %.3fs)\r\n", filename, timeTaken);
+	printf("Screenshot taken: %s (took %.3fs)\r\n", filename, timeTaken);
 }
+
+static bool_t mouseGetXYZ(GMouse* m, GMouseReading* pdr)
+{
+	(void)m;
+
+	// No buttons
+	pdr->buttons = 0;
+	pdr->z = 0;
+
+	TouchAD7843Measurement touch;
+	TouchAD7843Get(&devTouch, &touch);
+
+	if(touch.pressed)
+	{
+		pdr->z = 1;
+		pdr->x = touch.x;
+		pdr->y = touch.y;
+	}
+
+	return TRUE;
+}
+
+static void calSave(GMouse *m, const void *buf, size_t sz)
+{
+	(void)m;
+	(void)sz;
+
+	float* pCalib = (float*)buf;
+
+	for(uint8_t i = 0; i < 6; i++)
+		printf("%.8f\r\n", pCalib[i]);
+}
+
+static const float calib[] = {
+	0.00114166f, 0.06780271f, -19.17998314f,
+	0.09104055f, 0.00010331f, -15.59686184f,
+};
+
+static bool_t calLoad(GMouse *m, void *buf, size_t sz)
+{
+	(void)m;
+
+	if(sz != sizeof(calib))
+		return FALSE;
+
+	memcpy(buf, calib, sz);
+
+	return TRUE;
+}
+
+static bool_t mouseInit(GMouse* m, unsigned driverinstance)
+{
+	(void)m;
+	(void)driverinstance;
+
+	return TRUE;
+}
+
+// Resolution and Accuracy Settings
+#define GMOUSE_ADS7843_PEN_CALIBRATE_ERROR		8
+#define GMOUSE_ADS7843_PEN_CLICK_ERROR			6
+#define GMOUSE_ADS7843_PEN_MOVE_ERROR			4
+#define GMOUSE_ADS7843_FINGER_CALIBRATE_ERROR	14
+#define GMOUSE_ADS7843_FINGER_CLICK_ERROR		18
+#define GMOUSE_ADS7843_FINGER_MOVE_ERROR		14
+
+const GMouseVMT const GMOUSE_DRIVER_VMT[1] = {{
+	{
+		GDRIVER_TYPE_TOUCH,
+		GMOUSE_VFLG_TOUCH | GMOUSE_VFLG_CALIBRATE | /*GMOUSE_VFLG_CAL_TEST |*/ GMOUSE_VFLG_ONLY_DOWN | /*GMOUSE_VFLG_POORUPDOWN |*/ GMOUSE_VFLG_CAL_EXTREMES,
+		sizeof(GMouse),
+		_gmouseInitDriver,
+		_gmousePostInitDriver,
+		_gmouseDeInitDriver
+	},
+	1,				// z_max - (currently?) not supported
+	0,				// z_min - (currently?) not supported
+	1,				// z_touchon
+	0,				// z_touchoff
+	{				// pen_jitter
+		GMOUSE_ADS7843_PEN_CALIBRATE_ERROR,			// calibrate
+		GMOUSE_ADS7843_PEN_CLICK_ERROR,				// click
+		GMOUSE_ADS7843_PEN_MOVE_ERROR				// move
+	},
+	{				// finger_jitter
+		GMOUSE_ADS7843_FINGER_CALIBRATE_ERROR,		// calibrate
+		GMOUSE_ADS7843_FINGER_CLICK_ERROR,			// click
+		GMOUSE_ADS7843_FINGER_MOVE_ERROR			// move
+	},
+	mouseInit,	 	// init
+	0,				// deinit
+	mouseGetXYZ,	// get
+	calSave,		// calsave
+	calLoad			// calload
+}};

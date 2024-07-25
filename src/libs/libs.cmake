@@ -1,0 +1,5 @@
+include(${CMAKE_CURRENT_LIST_DIR}/chibios/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/cmsis_core/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/dsp/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/fatfs/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/ugfx/CMakeLists.txt)

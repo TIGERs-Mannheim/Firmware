@@ -143,7 +143,7 @@ void gtimerStart(GTimer *pt, GTimerFunction fn, void *param, bool_t periodic, de
 	if (!hThread) {
 		hThread = gfxThreadCreate(waTimerThread, GTIMER_THREAD_WORKAREA_SIZE, GTIMER_THREAD_PRIORITY, GTimerThreadHandler, 0);
 		if (hThread) {
-			hThread->p_name = "ugfx";
+			hThread->name = "ugfx";
 			gfxThreadClose(hThread);}		// We never really need the handle again
 	}
 

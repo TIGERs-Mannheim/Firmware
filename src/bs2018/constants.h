@@ -1,10 +1,3 @@
-/*
- * constants.h
- *
- *  Created on: 23.10.2017
- *      Author: AndreR
- */
-
 #pragma once
 
 /////////////////////////////////////////////////
@@ -32,29 +25,36 @@
 #define WIFI_TX_SIZE 400
 #define WIFI_RX_SIZE 400
 
-/*
-// NRF24
-#define NRF24_TX_SIZE 2048
-#define NRF24_RX_SIZE 2048
-
-// UART8 - EXT
-#define UART8_TX_SIZE 1000
-#define UART8_RX_SIZE 1000
-#define UART8_MAX_PACKET_SIZE 64
-*/
+/////////////////////////////////////////////////
+// Task Priorities
+/////////////////////////////////////////////////
+#define TASK_PRIO_ROUTER_TX		(NORMALPRIO + 50)
+#define TASK_PRIO_ROUTER_RX		(NORMALPRIO + 30)
+#define TASK_PRIO_BASE_STATION	(NORMALPRIO + 15)
+#define TASK_PRIO_NET_IF		(NORMALPRIO + 10)
+#define TASK_PRIO_ETH			(NORMALPRIO +  9)
+#define TASK_PRIO_SSL_VISION	(NORMALPRIO +  0)
+#define TASK_PRIO_SHELL			(NORMALPRIO -  5)
+#define TASK_PRIO_CLI_SERIAL	(NORMALPRIO - 10)
+#define TASK_PRIO_TOUCH			(NORMALPRIO - 35)
+#define TASK_PRIO_PRESENTER		(NORMALPRIO - 40)
 
 /////////////////////////////////////////////////
 // IRQ Levels
 /////////////////////////////////////////////////
 
+#define IRQL_WIFI_HIGH_PRIO	0
+#define IRQL_WIFI_SPI_DONE	1
+#define IRQL_WIFI_PIN		2
+#define IRQL_WIFI_TIMEOUT	3
+
+#define IRQL_WIFI_LOW_PRIO	5
+
 // Console USART
 #define IRQL_USART1 14
 
-// MII Data
-#define IRQL_ETH_DATA 12
-
-// MII IRQ (link change)
-#define IRQL_ETH_LINK 15
+// Network
+#define IRQL_ETH 12
 
 // Wifi IRQ line (WF1)
 #define IRQL_WIFI 9

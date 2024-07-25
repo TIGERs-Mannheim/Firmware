@@ -5,12 +5,37 @@ function [ skill ] = processSkillData( logData, sampleTimes )
 numSamples = length(sampleTimes);
 [skill.drive.pos.global, skill.drive.vel.local] = procSetpoints();
 [skill.drive.modeXY, skill.drive.modeW] = procMode();
-[skill.dribbler.speed, skill.dribbler.maxCurrent, skill.dribbler.voltage, skill.dribbler.mode] = procDribbler();
+[skill.lim.velXY, skill.lim.velW, skill.lim.accXY, skill.lim.accW] = procDriveLimits();
+[skill.dribbler.speed, skill.dribbler.maxForce, skill.dribbler.voltage, skill.dribbler.mode] = procDribbler();
 [skill.kicker.mode, skill.kicker.device, skill.kicker.speed] = procKicker();
 
 function tCor = timeRolloverComp(tIn)
     cor = cumsum([0; diff(tIn) < -2147483648])*4294967296;
     tCor = tIn + cor;
+end
+
+function [velMaxXY, velMaxW, accMaxXY, accMaxW] = procDriveLimits()
+	firstCol = find(strcmp(logData.skill_output.names, 'vel_max_xy'));
+
+	limData = logData.skill_output.data(:,[1 firstCol:firstCol+3]);
+
+	velMaxXY = zeros(numSamples, 1);
+    velMaxW = zeros(numSamples, 1);
+    accMaxXY = zeros(numSamples, 1);
+    accMaxW = zeros(numSamples, 1);
+    
+    if length(limData) < 10
+        return;
+    end
+
+    limData(:,1) = timeRolloverComp(limData(:,1));
+	[~, ia] = unique(limData(:,1));	% find unqiue entries
+	limData = limData(ia, :);	% delete duplicates
+
+    velMaxXY = interp1(limData(:,1), limData(:,2), sampleTimes);
+    accMaxXY = interp1(limData(:,1), limData(:,3), sampleTimes);
+    velMaxW = interp1(limData(:,1), limData(:,4), sampleTimes);
+    accMaxW = interp1(limData(:,1), limData(:,5), sampleTimes);
 end
 
 function [setPosGlobal, setVelLocal] = procSetpoints()
@@ -55,8 +80,8 @@ function [modeXY, modeW] = procMode()
     modeW(:,1) = interp1(ctrlModeData(:,1), ctrlModeData(:,3), sampleTimes);
 end
 
-function [speed, maxCurrent, voltage, mode] = procDribbler()
-    firstCol = find(strcmp(logData.skill_output.names, 'dribbler_speed'));
+function [speed, maxForce, voltage, mode] = procDribbler()
+    firstCol = find(strcmp(logData.skill_output.names, 'dribbler_vel'));
     
     dribData = logData.skill_output.data(:,[1 firstCol:firstCol+3]);
 
@@ -65,7 +90,7 @@ function [speed, maxCurrent, voltage, mode] = procDribbler()
     dribData = dribData(ia, :);	% delete duplicates
 
     speed = interp1(dribData(:,1), dribData(:,2), sampleTimes);
-    maxCurrent = interp1(dribData(:,1), dribData(:,3), sampleTimes);
+    maxForce = interp1(dribData(:,1), dribData(:,3), sampleTimes);
     voltage = interp1(dribData(:,1), dribData(:,4), sampleTimes);
     mode = interp1(dribData(:,1), dribData(:,5), sampleTimes);
 end

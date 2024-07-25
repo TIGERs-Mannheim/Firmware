@@ -5,11 +5,14 @@ project(motor2019)
 set(RUN_EXEC "${PROJECT_NAME}.elf")
 
 include(../../cmake/options.cmake)
-include(../libs/CMakeLists.txt)
+include(../libs/libs.cmake)
+include(../shared/shared.cmake)
 
 include_directories(
     ${cmsis_core_INCLUDE_DIRS}
-    ${common_INCLUDE_DIRS}
+    ${shared_INCLUDE_DIRS}
+    ${math_INCLUDE_DIRS}
+    ${dsp_INCLUDE_DIRS}
     ${f0xx_INCLUDE_DIRS}
 )
 
@@ -41,7 +44,8 @@ add_executable(${RUN_EXEC}
     main.c
     usart1.c
     
-    ${common_SOURCES}
+    ${shared_SOURCES}
+    ${math_SOURCES}
     ${f0xx_SOURCES}
 )
 

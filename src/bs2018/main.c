@@ -1,11 +1,4 @@
 /*
- * main.c
- *
- *  Created on: 19.10.2017
- *      Author: AndreR
- */
-
-/*
  * Memory map:
  * 0x00000000 - 0x00004000 (  16k) ITC RAM
  *
@@ -36,56 +29,60 @@
  * 0xA0001000 - 0xA0002000 (   4k) QSPI Ctrl / AHB3
  *
  * 0xE0000000 - 0xE00FFFFF (   1M) Cortex-M7 Internal Peripherals
+ *
+ * Timer Allocation:
+ * - TIM1  TFT Brightness
+ * - TIM2  Microsecond system time
+ * - TIM5  Wifi Timeout Trigger
+ * - TIM7  (Old) Wifi 1ms trigger
  */
 
 #include "ch.h"
 
-#include "util/init_hal.h"
-#include "util/boot.h"
-#include "util/terminal.h"
-#include "util/console.h"
-#include "util/sys_time.h"
+#include "hal/init_hal.h"
+#include "hal/sys_time.h"
+#include "hal/rng.h"
 #include "util/flash_fs.h"
+#include "util/cpu_load.h"
+#include "util/fault_handler.h"
 
-#include "hal/led.h"
-#include "hal/usart1.h"
-#include "hal/eth.h"
-#include "hal/tft.h"
-#include "hal/rtc.h"
-#include "hal/touch.h"
+#include "sys/eth0.h"
+#include "sys/rtc.h"
+#include "sys/spi3.h"
+#include "sys/tim2.h"
+#include "sys/tim5.h"
+#include "sys/usart1.h"
 
-#include "cpu_load.h"
-#include "cli.h"
-#include "vision.h"
-#include "network.h"
-#include "wifi.h"
+#include "dev/led.h"
+#include "dev/shell.h"
+#include "dev/sky_fem.h"
+#include "dev/sx1280.h"
+#include "dev/tft.h"
+#include "dev/touch.h"
+
+#include "misc/inventory.h"
+
+#include "base_station.h"
+#include "router.h"
 #include "presenter.h"
-#include "hub.h"
+#include "system.h"
+#include "syscalls.h"
+#include "shell_commands.h"
+#include "constants.h"
 
-static THD_WORKING_AREA(waTerminal, 4096);
-static THD_WORKING_AREA(waCLI, 8192);
-#ifndef ENV_BOOT
-static THD_WORKING_AREA(waNetwork, 4096);
-static THD_WORKING_AREA(waWifi, 4096);
-static THD_WORKING_AREA(waPresenter, 4096);
-static THD_WORKING_AREA(waTouch, 512);
-#endif
+#define EVENT_MASK_CLI_UART			EVENT_MASK(0)
 
-USART_TypeDef* pFaultUart = USART1;
-
-static void mpuInit();
+static int syscallWrite(const char* pData, int length)
+{
+	return UartDmaWrite(&usart1, pData, length);
+}
 
 int main()
 {
+	FaultHandlerInit(USART1, 0);
+
 #ifdef DEBUG
 	SCB_DisableDCache();
-#endif
-
-#ifdef ENV_BOOT
-	if(!BootIsBootloaderSelected())
-		BootJumpToApplication();
-
-	BootSetBootloaderSelected(0);
 #endif
 
 	uint32_t resetReason = (RCC->CSR & 0xFE000000) >> 24;
@@ -97,22 +94,12 @@ int main()
 	RCC->APB1ENR |= RCC_APB1ENR_PWREN;
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-	// results in 216MHz main clock and 48MHz USB clock
-	SystemClockInitData clkInit;
-	clkInit.pll.M = 25;
-	clkInit.pll.N = 432;
-	clkInit.pll.P = 2;
-	clkInit.pll.Q = 9;
-	clkInit.HSEBypass = 1;
-	clkInit.APB1Div = 4;	// = 54MHz
-	clkInit.APB2Div = 4;	// = 54MHz
-	clkInit.RTCDiv = 12;	// = 1MHz
-	clkInit.flashLatency = 7;
-	clkInit.sysTickFreq = CH_CFG_ST_FREQUENCY;
-	SystemClockInit(&clkInit, 216000000UL);
+	// set vector table offset
+	SCB->VTOR = 0x00220000;
 
-	// boost timer clock to full 216MHz
-	RCC->DCKCFGR1 |= RCC_DCKCFGR1_TIMPRE;
+	SystemInit();
+	TIM2Init();
+	SysTimeInit(&tim2);
 
 	// Enable compensation cell to reduce noise on power lines with 50MHz/100MHz I/Os
 	SYSCFG->CMPCR = SYSCFG_CMPCR_CMP_PD;
@@ -120,101 +107,58 @@ int main()
 	// Enable usage fault, bus fault, and mem fault
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
 
-	// set vector table offset
-#ifdef ENV_BOOT
-	SCB->VTOR = 0x00200000;
-#else
-	SCB->VTOR = 0x00200000 + BOOT_APP_OFFSET;
-#endif
-
-	mpuInit();
-
 	chSysInit();
 
-	// --- HAL ---
-	LEDInit();
+	// --- Software-Only Components ---
+	FlashFSInit(0x08010000, 32*1024);
+	InventoryInit();
+
+	// --- SYS ---
+	USART1Init(IRQL_USART1, TASK_PRIO_CLI_SERIAL);
+	SPI3Init(IRQL_WIFI_SPI_DONE);
+	TIM5Init(IRQL_WIFI_TIMEOUT);
+	RNGInit();
 	RTCInit();
-	FlashFSInit(0x08010000, 0x8000);
-	USART1Init();
-#ifndef ENV_BOOT
+	Eth0Init(TASK_PRIO_ETH, IRQL_ETH);
+
+	syscallWriteFunc = &syscallWrite;
+	setvbuf(stdout, NULL, _IOLBF, 0); // set stdio (used by printf) to be line-buffered
+
+	// --- DEV ---
+	LEDInit();
+	DevShellInit(&usart1, TASK_PRIO_SHELL);
 	TFTInit();
 	TouchInit();
-#endif
+	DevSkyFemInit();
+	DevSX1280Init(&spi3, &tim5, IRQL_WIFI_HIGH_PRIO, IRQL_WIFI_PIN);
 
 	// --- High-Level Systems ---
-	TerminalInit(&usart1.inQueue, &usart1.outQueue);
-	CLIInit();
-#ifndef ENV_BOOT
-	VisionInit();
-	EthInit();
-	NetworkInit();
-	WifiInit();
-	HubInit();
+	BaseStationInit();
+	RouterInit();
+	ShellCommandsInit();
 	PresenterInit();
-#endif
+
+	printf("\f--- Base Station v3b (0x%02X) ---\r\n", resetReason);
 
 	chThdSetPriority(HIGHPRIO-1);
 
-	// --- Tasks ---
-#ifndef ENV_BOOT
-	chThdCreateStatic(waWifi, sizeof(waWifi), NORMALPRIO+10, WifiTask, 0);
-	chThdCreateStatic(waNetwork, sizeof(waNetwork), NORMALPRIO+1, NetworkTask, 0);
-	chThdCreateStatic(waTouch, sizeof(waTouch), NORMALPRIO-35, TouchTask, 0);
-	chThdCreateStatic(waPresenter, sizeof(waPresenter), NORMALPRIO-40, PresenterTask, 0);
-#endif
-	chThdCreateStatic(waTerminal, sizeof(waTerminal), NORMALPRIO-5, TerminalTask, 0);
-	chThdCreateStatic(waCLI, sizeof(waCLI), NORMALPRIO-10, CLITask, 0);
+	event_listener_t cliUartListener;
 
-#ifdef ENV_BOOT
-	ConsolePrint("\f--- Base Station v3b (Bootloader, 0x%02X) ---\r\n", resetReason);
-#else
-	ConsolePrint("\f--- Base Station v3b (0x%02X) ---\r\n", resetReason);
-#endif
+	chEvtRegisterMaskWithFlags(&usart1.eventSource, &cliUartListener, EVENT_MASK_CLI_UART, UART_DMA_EVENT_BREAK_DETECTED);
 
 	while(1)
 	{
-#ifdef ENV_BOOT
-		LEDToggle(LED_RED);
-		chThdSleepMilliseconds(100);
-#else
 		LEDToggle(LED_GREEN);
 		chThdSleepMilliseconds(500);
-#endif
+
+		eventmask_t events = chEvtWaitAnyTimeout(ALL_EVENTS, TIME_IMMEDIATE);
+		if(events & EVENT_MASK_CLI_UART)
+		{
+			NVIC_SystemReset();
+		}
 
 		CPULoadUpdateUsage();
 	}
 
 	return 0;
-}
-
-static void mpuInit()
-{
-	// Enable MPU with default regions as background
-	MPU->CTRL = MPU_CTRL_ENABLE_Msk | MPU_CTRL_PRIVDEFENA_Msk;
-
-	// Set up MPU to disable caching on the TFT external RAM address
-	// select region 0
-	MPU->RNR = 0;
-	// set base address
-	MPU->RBAR = 0x60000000;
-	// 512MB size, execute never, full access, non-shared device (disables caching)
-	MPU->RASR = MPU_RASR_XN_Msk | (0b010 << 19)| (3 << 24) | (28 << 1) | MPU_RASR_ENABLE_Msk;
-
-	// read only from 0x00 (128MB)
-	MPU->RNR = 1;
-	MPU->RBAR = 0x00000000;
-	MPU->RASR = (0b101 << 24) | MPU_RASR_B_Msk | MPU_RASR_C_Msk | MPU_RASR_S_Msk | (0b001 << 19) | (26 << 1) | MPU_RASR_ENABLE_Msk;
-
-	// 256MB, no access, except for first 32MB
-	MPU->RNR = 2;
-	MPU->RBAR = 0x50000000;
-	MPU->RASR = MPU_RASR_XN_Msk | (0b010 << MPU_RASR_TEX_Pos) |
-			(0x01 << MPU_RASR_SRD_Pos) | (27 << MPU_RASR_SIZE_Pos) | MPU_RASR_ENABLE_Msk;
-
-	MPU->RNR = 3;
-	MPU->RBAR = 0;
-	MPU->RASR = 0;
-
-	__DSB();
-	__ISB();
 }

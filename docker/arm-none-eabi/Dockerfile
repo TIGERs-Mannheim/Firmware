@@ -1,14 +1,14 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
-ENV PATH $PATH:/opt/gcc-arm-none-eabi-8-2019-q3-update/bin
+ENV PATH $PATH:/opt/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi/bin
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt update
 
-RUN apt install -y cmake git make wget bzip2 curl g++ && \
+RUN apt install -y cmake git make wget bzip2 curl g++ xz-utils && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 
-RUN wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/8-2019q3/RC1.1/gcc-arm-none-eabi-8-2019-q3-update-linux.tar.bz2
-RUN tar -xf gcc-arm-none-eabi-8-2019-q3-update-linux.tar.bz2 -C /opt/
+RUN wget -q https://developer.arm.com/-/media/Files/downloads/gnu/12.3.rel1/binrel/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz
+RUN tar -xf arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz -C /opt/

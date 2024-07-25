@@ -1,12 +1,12 @@
 /*
-    ChibiOS - Copyright (C) 2006..2015 Giovanni Di Sirio.
+    ChibiOS - Copyright (C) 2006,2007,2008,2009,2010,2011,2012,2013,2014,
+              2015,2016,2017,2018,2019,2020,2021 Giovanni Di Sirio.
 
     This file is part of ChibiOS.
 
     ChibiOS is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
-    (at your option) any later version.
+    the Free Software Foundation version 3 of the License.
 
     ChibiOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,93 +18,112 @@
 */
 
 /**
- * @file    ARMCMx/compilers/GCC/chtypes.h
- * @brief   ARM Cortex-Mx port system types.
+ * @file    ARM-common/chtypes.h
+ * @brief   ARM ports system types.
  *
- * @addtogroup ARMCMx_GCC_CORE
+ * @addtogroup ARM_COMMON_CORE
  * @{
  */
 
-#ifndef _CHTYPES_H_
-#define _CHTYPES_H_
+#ifndef CHTYPES_H
+#define CHTYPES_H
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
-/**
- * @name    Common constants
- */
-/**
- * @brief   Generic 'false' boolean constant.
- */
-#if !defined(FALSE) || defined(__DOXYGEN__)
-#define FALSE               0
-#endif
+#include "ccportab.h"
 
 /**
- * @brief   Generic 'true' boolean constant.
- */
-#if !defined(TRUE) || defined(__DOXYGEN__)
-#define TRUE                1
-#endif
-/** @} */
-
-/**
- * @name    Derived generic types
+ * @name    Architecture data constraints
  * @{
  */
-typedef volatile int8_t     vint8_t;        /**< Volatile signed 8 bits.    */
-typedef volatile uint8_t    vuint8_t;       /**< Volatile unsigned 8 bits.  */
-typedef volatile int16_t    vint16_t;       /**< Volatile signed 16 bits.   */
-typedef volatile uint16_t   vuint16_t;      /**< Volatile unsigned 16 bits. */
-typedef volatile int32_t    vint32_t;       /**< Volatile signed 32 bits.   */
-typedef volatile uint32_t   vuint32_t;      /**< Volatile unsigned 32 bits. */
+#define PORT_ARCH_SIZEOF_DATA_PTR   4
+#define PORT_ARCH_SIZEOF_CODE_PTR   4
+#define PORT_ARCH_REGISTERS_WIDTH   32
+#define PORT_ARCH_REVERSE_ORDER     1
 /** @} */
 
 /**
- * @name    Kernel types
+ * @name    Port types
  * @{
  */
-typedef uint32_t            rtcnt_t;        /**< Realtime counter.          */
-typedef uint64_t            rttime_t;       /**< Realtime accumulator.      */
-typedef uint32_t            syssts_t;       /**< System status word.        */
-typedef uint8_t             tmode_t;        /**< Thread flags.              */
-typedef uint8_t             tstate_t;       /**< Thread state.              */
-typedef uint8_t             trefs_t;        /**< Thread references counter. */
-typedef uint8_t             tslices_t;      /**< Thread time slices counter.*/
-typedef uint32_t            tprio_t;        /**< Thread priority.           */
-typedef int32_t             msg_t;          /**< Inter-thread message.      */
-typedef int32_t             eventid_t;      /**< Numeric event identifier.  */
-typedef uint32_t            eventmask_t;    /**< Mask of event identifiers. */
-typedef uint32_t            eventflags_t;   /**< Mask of event flags.       */
-typedef int32_t             cnt_t;          /**< Generic signed counter.    */
-typedef uint32_t            ucnt_t;         /**< Generic unsigned counter.  */
+/**
+ * @brief   Realtime counter.
+ */
+typedef uint32_t            port_rtcnt_t;
+
+/**
+ * @brief   Realtime accumulator.
+ */
+typedef uint64_t            port_rttime_t;
+
+/**
+ * @brief   System status word.
+ */
+typedef uint32_t            port_syssts_t;
+
+/**
+ * @brief   Type of stack and memory alignment enforcement.
+ * @note    In this architecture the stack alignment is enforced to 64 bits,
+ *          32 bits alignment is supported by hardware but deprecated by ARM,
+ *          the implementation choice is to not offer the option.
+ */
+typedef uint64_t            port_stkalign_t;
 /** @} */
+
+/**
+ * @brief   This port does not define OS-related types.
+ */
+#define PORT_DOES_NOT_PROVIDE_TYPES
 
 /**
  * @brief   ROM constant modifier.
  * @note    It is set to use the "const" keyword in this port.
  */
-#define ROMCONST const
+#define ROMCONST            CC_ROMCONST
 
 /**
  * @brief   Makes functions not inlineable.
- * @note    If the compiler does not support such attribute then the
- *          realtime counter precision could be degraded.
+ * @note    If the compiler does not support such attribute then some
+ *          time-dependent services could be degraded.
  */
-#define NOINLINE __attribute__((noinline))
+#define NOINLINE            CC_NO_INLINE
 
 /**
- * @brief   Optimized thread function declaration macro.
+ * @brief   Memory alignment enforcement for variables.
  */
-#define PORT_THD_FUNCTION(tname, arg) void tname(void *arg)
+#define ALIGNED_VAR(n)      CC_ALIGN_DATA(n)
 
 /**
- * @brief   Packed variable specifier.
+ * @brief   Size of a pointer.
+ * @note    To be used where the sizeof operator cannot be used, preprocessor
+ *          expressions for example.
  */
-#define PACKED_VAR __attribute__((packed))
+#define SIZEOF_PTR          PORT_ARCH_SIZEOF_DATA_PTR
 
-#endif /* _CHTYPES_H_ */
+/**
+ * @brief   Marks a boolean expression as likely true.
+ *
+ * @param[in] x         a valid expression
+ */
+#if defined(CC_LIKELY) || defined(__DOXYGEN__)
+#define PORT_LIKELY(x)      CC_LIKELY(x)
+#else
+#define PORT_LIKELY(x)      x
+#endif
+
+/**
+ * @brief   Marks a boolean expression as likely false.
+ *
+ * @param[in] x         a valid expression
+ */
+#if defined(CC_UNLIKELY) || defined(__DOXYGEN__)
+#define PORT_UNLIKELY(x)    CC_UNLIKELY(x)
+#else
+#define PORT_UNLIKELY(x)    x
+#endif
+
+#endif /* CHTYPES_H */
 
 /** @} */

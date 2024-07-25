@@ -17,7 +17,7 @@
  */
 
 #include "main.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include "drive_motor.h"
 
 #define CCMR1_PHASE1_OFF (TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_2)
@@ -107,13 +107,13 @@ void DriveMotorInit()
 	TIM1->PSC = 0; // => 48MHz
 	TIM1->ARR = 1004;
 	TIM1->RCR = 0;
-	// ARR is preloaded, Center-Aligned Mode 1, compare flag for encoder trigger only when downcounting
-	TIM1->CR1 = TIM_CR1_ARPE | TIM_CR1_CMS_0;
+	// ARR is preloaded, Center-Aligned Mode 1, compare flag for encoder trigger only when downcounting, t_DTS = 2*t_CKINT
+	TIM1->CR1 = TIM_CR1_ARPE | TIM_CR1_CMS_0 | TIM_CR1_CKD_0;
 	// CCxE, CCxNE, OCxM are preloaded, update with COM
 	TIM1->CR2 = TIM_CR2_CCPC;
-	// OCREF_CLR_INT connected to ETRF, external trigger filter = 1us
+	// OCREF_CLR_INT connected to ETRF, external trigger filter = 10.67us
 	// ETRF on TRGI, Slave mode controller in trigger mode (clear events now visible on TIF bit in SR)
-	TIM1->SMCR = TIM_SMCR_OCCS | TIM_SMCR_ETF_3 | TIM_SMCR_TS | TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1;
+	TIM1->SMCR = TIM_SMCR_OCCS | TIM_SMCR_ETF | TIM_SMCR_TS | TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1;
 	TIM1->DIER = 0;
 	TIM1->SR = 0;
 	// CCR registers preloaded, all half-bridges off, OCxRef cleared by ETRF
@@ -126,7 +126,7 @@ void DriveMotorInit()
 	TIM1->CCR4 = 20;
 	TIM1->EGR = TIM_EGR_UG | TIM_EGR_COMG;
 	// Outputs forced to inactive level in idle (MOE=0), 250ns dead time, active high break input
-	TIM1->BDTR = TIM_BDTR_OSSR | TIM_BDTR_OSSI | (12 << TIM_BDTR_DTG_Pos) | TIM_BDTR_BKE | TIM_BDTR_BKP;
+	TIM1->BDTR = TIM_BDTR_OSSR | TIM_BDTR_OSSI | (6 << TIM_BDTR_DTG_Pos) | TIM_BDTR_BKE | TIM_BDTR_BKP;
 	// Configure DMA: target = CCR1, 3 transfers => CCR1 to CCR3
 	TIM1->DCR = (2 << TIM_DCR_DBL_Pos) | (13 << TIM_DCR_DBA_Pos);
 

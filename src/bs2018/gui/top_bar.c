@@ -125,17 +125,8 @@ void TopBarSetTime(uint32_t unixTimestamp)
 	gwinSetText(handles.hDate, dateBuf, FALSE);
 }
 
-void TopBarSetEthStats(uint32_t rx, uint32_t tx)
+void TopBarSetEthStats(uint32_t rxBytes, uint32_t txBytes)
 {
-	static uint32_t lastRx = 0;
-	static uint32_t lastTx = 0;
-
-	uint32_t rxBytes = rx-lastRx;
-	uint32_t txBytes = tx-lastTx;
-
-	lastRx = rx;
-	lastTx = tx;
-
 	static char rxBuf[16];
 	static char txBuf[16];
 

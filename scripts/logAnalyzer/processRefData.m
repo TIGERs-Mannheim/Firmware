@@ -5,10 +5,31 @@ function [ ref ] = processRefData( logData, sampleTimes )
 numSamples = length(sampleTimes);
 [ref.pos.global, ref.vel.global, ref.acc.global, ...
     ref.vel.local, ref.acc.local] = procTraj();
+[ref.drib.vel, ref.drib.maxForce] = procDribbler();
 
 function tCor = timeRolloverComp(tIn)
     cor = cumsum([0; diff(tIn) < -2147483648])*4294967296;
     tCor = tIn + cor;
+end
+
+function [vel, maxForce] = procDribbler()
+    firstCol = find(strcmp(logData.ctrl_ref.names, 'dribbler_vel'));
+
+    dribData = logData.ctrl_ref.data(:,[1 firstCol:firstCol+1]);
+    vel = zeros(numSamples, 1);
+    maxForce = zeros(numSamples, 1);
+
+    if length(dribData) < 10
+        return;
+    end
+
+    dribData(:,1) = timeRolloverComp(dribData(:,1));
+
+	[~, ia] = unique(dribData(:,1));	% find unqiue entries
+	dribData = dribData(ia, :);	% delete duplicates
+
+    vel = interp1(dribData(:,1), dribData(:,2), sampleTimes);
+    maxForce = interp1(dribData(:,1), dribData(:,3), sampleTimes);
 end
 
 function [pos, velGlobal, accGlobal, velLocal, accLocal] = procTraj()

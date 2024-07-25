@@ -121,20 +121,20 @@ typedef struct {
 	DWORD	sclust;			/* File start cluster (0:no cluster chain, always 0 when fsize is 0) */
 	DWORD	clust;			/* Current cluster of fpter (not valid when fprt is 0) */
 	DWORD	dsect;			/* Sector number appearing in buf[] (0:invalid) */
-#if !_FS_READONLY
-	DWORD	dir_sect;		/* Sector number containing the directory entry */
-	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] */
-#endif
 #if _USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (Nulled on file open) */
-#endif
-#if _FS_LOCK
-	UINT	lockid;			/* File lock ID origin from 1 (index of file semaphore table Files[]) */
 #endif
 #if !_FS_TINY
 	BYTE	buf[_MAX_SS];	/* File private data read/write window */
 #endif
-} FIL;
+#if !_FS_READONLY
+	DWORD	dir_sect;		/* Sector number containing the directory entry */
+	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] */
+#endif
+#if _FS_LOCK
+	UINT	lockid;			/* File lock ID origin from 1 (index of file semaphore table Files[]) */
+#endif
+} __attribute__((aligned (32))) FIL;
 
 
 

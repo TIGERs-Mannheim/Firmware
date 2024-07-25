@@ -8,7 +8,7 @@
 #ifndef _GDISP_LLD_BOARD_H
 #define _GDISP_LLD_BOARD_H
 
-#include "util/init_hal.h"
+#include "hal/init_hal.h"
 
 #define TFT_CMD_REG ((volatile uint16_t*)0x60000000)
 #define TFT_DATA_REG ((volatile uint16_t*)0x60000100)

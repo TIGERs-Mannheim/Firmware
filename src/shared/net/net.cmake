@@ -1,0 +1,15 @@
+list(APPEND net_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/arp.c
+    ${CMAKE_CURRENT_LIST_DIR}/ethernet.c
+    ${CMAKE_CURRENT_LIST_DIR}/inet.c
+    ${CMAKE_CURRENT_LIST_DIR}/icmp.c
+    ${CMAKE_CURRENT_LIST_DIR}/igmp.c
+    ${CMAKE_CURRENT_LIST_DIR}/ipv4.c
+    ${CMAKE_CURRENT_LIST_DIR}/net_buf.c
+    ${CMAKE_CURRENT_LIST_DIR}/net_if.c
+    ${CMAKE_CURRENT_LIST_DIR}/net_proto.c
+    ${CMAKE_CURRENT_LIST_DIR}/udp_socket.c
+    ${CMAKE_CURRENT_LIST_DIR}/udp.c
+)
+
+list(APPEND net_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/..)

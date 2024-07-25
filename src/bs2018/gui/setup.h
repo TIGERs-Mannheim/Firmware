@@ -1,16 +1,8 @@
-/*
- * setup.h
- *
- *  Created on: 18.11.2017
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"
 #include "intercom_constants.h"
-#include "../wifi.h"
-#include "../network.h"
+#include "../base_station.h"
 
 typedef struct _SetupData
 {
@@ -25,7 +17,6 @@ typedef struct _SetupData
 	{
 		IPv4Address ip;
 		uint16_t port;
-		uint8_t mac;
 	} eth;
 
 	struct
@@ -38,5 +29,5 @@ typedef struct _SetupData
 typedef void(*SetupChangedCallback)(const SetupData*);
 
 GHandle SetupCreate();
-void SetupUpdate(WifiConfig* pConfig, NetworkConfig* pNetworkConfig);
+void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig);
 void SetupSetCallback(SetupChangedCallback cb);

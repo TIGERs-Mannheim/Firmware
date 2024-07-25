@@ -38,7 +38,7 @@
 #if !defined(TRUE)
 	#define TRUE        -1
 #endif
-#if (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 4)
+#if (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 7)
 	typedef char	bool_t;
 #endif
 
@@ -65,7 +65,7 @@ typedef tprio_t		threadpriority_t;
 
 	typedef Mutex		gfxMutex;
 	typedef Thread*		gfxThreadHandle;
-#elif (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 4)
+#elif (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 7)
 	#undef DECLARE_THREAD_STACK
 	#define DECLARE_THREAD_STACK(a, b)  THD_WORKING_AREA(a, b)
 	
@@ -94,7 +94,7 @@ extern "C" {
 	#define gfxMutexExit(pmutex)		chMtxUnlock()
 	#define gfxExit()					chSysHalt()
 	#define gfxHalt(msg)				{ chDbgPanic(msg); chSysHalt(); }
-#elif (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 4)
+#elif (CH_KERNEL_MAJOR == 3) || (CH_KERNEL_MAJOR == 7)
 	#define gfxSystemTicks()			chVTGetSystemTimeX()
 	#define gfxMutexInit(pmutex)		chMtxObjectInit(pmutex)
 	#define gfxMutexExit(pmutex)		chMtxUnlock(pmutex)
@@ -107,7 +107,7 @@ extern memory_heap_t guiHeap;
 #define gfxAlloc(sz)				chHeapAlloc(&guiHeap, sz)
 #define gfxFree(ptr)				chHeapFree(ptr)
 #define gfxYield()					chThdYield()
-#define gfxMillisecondsToTicks(ms)	MS2ST(ms)
+#define gfxMillisecondsToTicks(ms)	TIME_MS2I(ms)
 #define gfxSystemLock()				chSysLock()
 #define gfxSystemUnlock()			chSysUnlock()
 #define gfxMutexDestroy(pmutex)		(void)pmutex

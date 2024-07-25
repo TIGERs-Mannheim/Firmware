@@ -5,7 +5,7 @@
  *      Author: AndreR
  */
 
-#include "system_init.h"
+#include "hal/system_init.h"
 
 static volatile uint8_t txBusy = 0;
 

@@ -5,7 +5,7 @@ if(NOT GIT_FOUND)
 endif()
 
 # describe git version
-execute_process(COMMAND ${GIT_EXECUTABLE} describe --dirty
+execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --dirty
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
                 OUTPUT_VARIABLE GITSTR
                 OUTPUT_STRIP_TRAILING_WHITESPACE)

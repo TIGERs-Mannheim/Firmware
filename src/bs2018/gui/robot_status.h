@@ -1,10 +1,3 @@
-/*
- * robot_status.h
- *
- *  Created on: 02.11.2017
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"
@@ -13,7 +6,6 @@
 #define MOVE_MODE_OFF 0
 #define MOVE_MODE_VEL_XY 1
 #define MOVE_MODE_VEL_YW 2
-#define MOVE_MODE_POS 3
 
 typedef struct _MoveControlState
 {
@@ -41,7 +33,7 @@ typedef struct _ControlPanelLimits
 	float maxAccW;
 	float kickSpeed;
 	float dribbleSpeed;
-	float dribbleCurrent;
+	float dribbleForce;
 } ControlPanelLimits;
 
 typedef struct _RobotStatus
@@ -56,7 +48,6 @@ typedef struct _RobotStatus
 
 extern RobotStatus robotStatus;
 
-void RobotStatusPositionFrameUpdate();
 GHandle RobotStatusCreate();
 void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable);
 uint8_t RobotStatusIsChargeKicker();

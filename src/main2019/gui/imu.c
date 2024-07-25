@@ -8,7 +8,7 @@
 #include "imu.h"
 #include <stdio.h>
 #include "gui/styles.h"
-#include "../inventory.h"
+#include "misc/inventory.h"
 
 static struct _handles
 {

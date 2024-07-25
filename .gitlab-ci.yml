@@ -1,0 +1,67 @@
+stages:
+- deploy-base
+- build
+- test
+- deploy
+
+build:
+  stage: build
+  image: registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1
+  script:
+  - cmake -B build -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
+  - cmake --build build -j 8
+  - cmake --build build --target tests -j 8
+  artifacts:
+    name: build-Firmware-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+    paths:
+    - build/*/*/*.elf
+    - build/*/*/*.bin
+    - build/bin/test_libs
+    expire_in: 5 mins
+
+.deploy:
+  stage: deploy
+  image: registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1
+  script:
+  - mkdir -p usb-update
+  - cp build/src/main2019/main2019.bin usb-update/
+  - cp build/src/ir2019/ir2019.bin usb-update/
+  - cp build/src/motor2019/motor2019.bin usb-update/
+  - cp deploy/README.txt ./
+  - touch usb-update/autorun_bootloader
+  artifacts:
+    name: deploy-Firmware-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+    paths:
+    - usb-update/
+    - README.txt
+
+deploy-default:
+  extends: .deploy
+  except:
+    - tags
+  artifacts:
+    expire_in: 1 week
+  
+
+deploy-release:
+  extends: .deploy
+  only:
+    - tags
+  artifacts:
+    expire_in: never
+    
+deploy_arm-none-eabi:
+  stage: deploy-base
+  tags:
+  - docker-build
+  script:
+  # Note: You have to change the version in the docker file first!
+  - 'docker build -t registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1 docker/arm-none-eabi'
+  - 'docker push registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1'
+  when: manual
+
+unittests:
+  stage: test
+  image: registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1
+  script:
+    - ./build/bin/test_libs

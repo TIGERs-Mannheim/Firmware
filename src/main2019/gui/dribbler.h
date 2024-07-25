@@ -1,13 +1,10 @@
-/*
- * dribbler.h
- *
- *  Created on: 17.08.2020
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"
+#include "drv/mcu_motor.h"
+#include "drv/mcu_dribbler.h"
+#include "log_msgs.h"
+#include "robot/fusion_ekf.h"
 
 GHandle DribblerCreate();
-void DribblerUpdate(float temp, float volt, float speed, float cur);
+void DribblerUpdate(const McuMotor* pMot, const McuDribbler* pDrib, const RobotCtrlState* pState, const RobotCtrlReference* pRef);

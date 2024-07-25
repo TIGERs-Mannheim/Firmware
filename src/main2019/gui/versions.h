@@ -1,10 +1,3 @@
-/*
- * versions.h
- *
- *  Created on: 01.07.2019
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"

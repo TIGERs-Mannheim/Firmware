@@ -6,7 +6,7 @@
  */
 
 #include "dribbler_ctrl.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include "log_msgs.h"
 #include "adc.h"
 #include "main.h"

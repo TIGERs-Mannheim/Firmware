@@ -1,7 +1,0 @@
-list(APPEND f0xx_SOURCES
-	${CMAKE_CURRENT_LIST_DIR}/startup_stm32f031x6.s
-    ${CMAKE_CURRENT_LIST_DIR}/system_init.c
-    ${CMAKE_CURRENT_LIST_DIR}/pi_ctrl_s12.c
-)
-
-list(APPEND f0xx_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})

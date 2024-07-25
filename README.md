@@ -1,24 +1,27 @@
 # TIGERs Mannheim Open-Source Firmware
-This repository contains the firmware for our v2016 robots, v2020 robots and for our base station.
+This repository contains the firmware for our v2020 robots and for our base station.
 
 Important: Avoid whitespaces in all paths (repository, toolchain, OpenOCD)!
 
 ## Prerequisites
 
 Under Windows, install/unpack the followings tools:
-* gnu-arm-none-eabi GCC toolchain (tested version 8-2019-q3, zip download [here](https://developer.arm.com/-/media/Files/downloads/gnu-rm/8-2019q3/RC1.1/gcc-arm-none-eabi-8-2019-q3-update-win32.zip?revision=2f0fd855-d015-423c-9c76-c953ae7e730b?product=GNU%20Arm%20Embedded%20Toolchain,ZIP,,Windows,8-2019-q3-update))
+* gnu-arm-none-eabi GCC toolchain (tested version 12.3, zip download [here](https://developer.arm.com/-/media/Files/downloads/gnu/12.3.rel1/binrel/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi.zip?rev=e6948d78806d4815912a858a6f6a85f6&hash=B20A83F31B9938D5EF819B14924A67E3))
 * git (available for windows [here](https://gitforwindows.org/))
 * [cmake](https://cmake.org)
-* [MinGW](http://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/installer/mingw-w64-install.exe/download) x86_64 8.1.0 posix seh
-* [OpenOCD](https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.11.0-4/xpack-openocd-0.11.0-4-win32-x64.zip) software for flashing and debugging
+* [MinGW](http://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/installer/mingw-w64-install.exe/download) `x86_64 8.1.0 posix seh` or any other source for make.exe (e.g. [MSYS2](https://www.msys2.org/))
+* [OpenOCD](https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-2/xpack-openocd-0.12.0-2-win32-x64.zip) software for flashing and debugging
+* (optional) tigerflash software for updating TIGERs hardware with a functional bootloader
 
 Under Linux, install/unpack the following tools:
-* gnu-arm-none-eabi GCC toolchain (tested version 8-2019-q3, tar.bz2 download [here](https://developer.arm.com/-/media/Files/downloads/gnu-rm/8-2019q3/RC1.1/gcc-arm-none-eabi-8-2019-q3-update-linux.tar.bz2?revision=c34d758a-be0c-476e-a2de-af8c6e16a8a2?product=GNU%20Arm%20Embedded%20Toolchain,64-bit,,Linux,8-2019-q3-update))
+* gnu-arm-none-eabi GCC toolchain for x86_64 hosts (tested version 12.3, tar download [here](https://developer.arm.com/-/media/Files/downloads/gnu/12.3.rel1/binrel/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz?rev=dccb66bb394240a98b87f0f24e70e87d&hash=B788763BE143D9396B59AA91DBA056B6))
+* For other hosts and silicon types (e.g. Apple/MacOS) please check [here](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads#panel2a). Use version 12.3 for bare-metal targets.
 * git (via your preferred package manager)
 * cmake (via your preferred package manager)
 * make (via your preferred package manager)
-* [OpenOCD](https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.11.0-4/xpack-openocd-0.11.0-4-linux-x64.tar.gz) software for flashing and debugging
+* [OpenOCD](https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-2/xpack-openocd-0.12.0-2-linux-x64.tar.gz) software for flashing and debugging
     * Copy udev rules to allow OpenOCD access to the USB interface. Go into the extracted openocd folder and run: `sudo cp contrib/60-openocd.rules /etc/udev/rules.d/`
+* (optional) tigerflash software for updating TIGERs hardware with a functional bootloader
 
 # Command Line Usage
 
@@ -32,11 +35,15 @@ Under Linux, install/unpack the following tools:
    cmake -B build -G "MinGW Makefiles" .
    cmake --build build -j
    ```
-1. Flash v2020 robot, v2016 robot, or base station
+1. Flash v2020 robot or base station via OpenOCD
    ```
    cmake --build build -t flash-mb2019
-   cmake --build build -t flash-mb2016
    cmake --build build -t flash-bs2018
+   ```
+1. Flash v2020 robot or base station via tigerflash (working bootloader required)
+   ```
+   cmake --build build -t tigerflash-mb2019
+   cmake --build build -t tigerflash-bs2018
    ```
 
 # IDE Usage
@@ -56,6 +63,7 @@ We use the Eclipse environment for development. The instructions have been teste
     1. Go to: Run/Debug => String Substitution
     1. Click: New..., Name: TIGERS_ARM_TOOLCHAIN, Value: The folder where you extracted the ARM toolchain
     1. Click: New..., Name: TIGERS_OPENOCD, Value: The folder where you extracted OpenOCD
+    1. (optional) Click: New..., Name: TIGERS_TIGERFLASH, Value: The folder where you extracted tigerflash
     1. (Windows only) Go to: C/C++ => Cmake4eclipse => General tab
     1. Change default build system to: MinGW Makefiles
     
@@ -73,7 +81,7 @@ We use the Eclipse environment for development. The instructions have been teste
 
 ## Compiling
 1. Right click on the Firmware project and go to: Build Configurations => Set Active
-1. There are different configurations, for the v2016 mainboard (mb2016), v2019 mainboard (mb2019) and for the Base Station (bs2018). All in debug and release configuration. The `All_Release` configuration will build all projects and can take some time.
+1. There are different configurations, for the v2019 mainboard (mb2019) and for the Base Station (bs2018). All in debug and release configuration. The `All_Release` configuration will build all projects and can take some time.
 1. Choose the configuration you wish to build
 1. Right click on the project and select Build Project
 1. You can also select the build configuration and the build command in the toolbar. It is the small hammer symbol and the symbol left of it. Make sure you select the Firmware project before using the buttons.
@@ -85,6 +93,7 @@ We use the Eclipse environment for development. The instructions have been teste
 1. Just select the desired configuration and hit Run (requires OpenOCD to be setup correctly)
 1. This can also be selected in the toolbar (white arrow in green circle)
 1. All files required to flash the target are build automatically before the flash procedure starts
+1. Alternatively, if you have tigerflash set up, you can use the mb2019_Release_Flash or bs2018_Release_Flash build configurations which will automatically flash the corresponding device after build
 
 ## Debugging
 Each processor can be debugged individually
@@ -101,7 +110,7 @@ Each processor can be debugged individually
 1. To use the debugging hardware the WinUSB driver is required
 1. This is most easily installed with Zadig's tool found here: http://zadig.akeo.ie/, download it and start it while your adapter is plugged in
 1. Select: Options => List All Devices
-1. In the drop-down list select the correct device. E.g. "Mainboard v11 (Interface 0)". For the mainboard and base station always select "Interface 0".
+1. In the drop-down list select the correct device. E.g. "Powerboard v1 (Interface 0)". For the mainboard and base station always select "Interface 0".
 1. Select the WinUSB driver and click "Replace driver", confirm the installation
 1. Close the tool, Done!
 
@@ -109,7 +118,7 @@ Each processor can be debugged individually
 
 The firmware project contains all the code for our base station (BS) and for our robot (MB). There are different build configurations to select what to build. 
 
-For each processor there is one folder below the "src" folder and a separate cmake projects. The base station has only one processor, called "bs2018". The robot mainboard uses another microcontroller which is called "main2016". 
+For each processor there is one folder below the "src" folder and a separate cmake projects. The base station has only one processor, called "bs2018".
 
 For v2020 robots there is "main2019" for the primary microcontroller, "ir2019" for the infrared barrier processor and "motor2019" for motor controllers.
 

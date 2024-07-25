@@ -1,17 +1,10 @@
-/*
- * setup.c
- *
- *  Created on: 18.11.2017
- *      Author: AndreR
- */
-
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "src/gwin/gwin_keyboard_layout.h"
-#include "util/console.h"
-#include "util/boot.h"
 #include "setup.h"
+#include "version.h"
 
 static const GVSpecialKey numpadSKeys[] = {
 		{ "\010", "\b", 0, 0 },							// \001 (1)	= Backspace
@@ -29,7 +22,6 @@ static struct _handles {
 
 	GHandle hEthIp;
 	GHandle hEthPort;
-	GHandle hEthMac;
 
 	GHandle hVisionIp;
 	GHandle hVisionPort;
@@ -82,9 +74,6 @@ static int16_t eventHandler(GEvent* pEvent)
 				if(sscanf(gwinGetText(handles.hEthPort), "%hu", &u16) == 1)
 					data.eth.port = u16;
 
-				if(sscanf(gwinGetText(handles.hEthMac), "%hu", &u16) == 1)
-					data.eth.mac = u16;
-
 				if(sscanf(gwinGetText(handles.hVisionIp), "%hu.%hu.%hu.%hu", &ip[0], &ip[1], &ip[2], &ip[3]) == 4)
 				{
 					for(uint8_t i = 0; i < 4; i++)
@@ -106,7 +95,7 @@ static int16_t eventHandler(GEvent* pEvent)
 		else if(pBtn->gwin == handles.hBtnRecalib)
 		{
 			FlashFSDelete("touch/calib");
-			BootReset();
+			NVIC_SystemReset();
 		}
 	}
 
@@ -169,12 +158,6 @@ GHandle SetupCreate()
 	GWidgetInit ethPortInit = {{55, 75, 160, 30, TRUE, hEthConfig}, "10201", 0, 0, 0};
 	handles.hEthPort = gwinTexteditCreate(0, &ethPortInit, 5);
 
-	GWidgetInit ethMacLabelInit = {{5, 115, 40, 30, TRUE, hEthConfig}, "Mac:", 0, 0, 0};
-	gwinLabelCreate(0, &ethMacLabelInit);
-
-	GWidgetInit ethMacInit = {{55, 115, 160, 30, TRUE, hEthConfig}, "48", 0, 0, 0};
-	handles.hEthMac = gwinTexteditCreate(0, &ethMacInit, 3);
-
 
 	GWidgetInit visionConfig = {{ 240, 5, 225, 155, TRUE, hTop}, 0, 0, 0, 0};
 	GHandle hVisionConfig = gwinContainerCreate(0, &visionConfig, GWIN_CONTAINER_BORDER);
@@ -195,6 +178,10 @@ GHandle SetupCreate()
 	handles.hVisionPort = gwinTexteditCreate(0, &visionPortInit, 5);
 
 
+	GWidgetInit versionLabelInit = {{10, 360, 300, 20, TRUE, hTop}, VersionGetString(), 0, 0, 0};
+	gwinLabelCreate(0, &versionLabelInit);
+
+
 	GWidgetInit btnEditSaveInit = {{400, 360, 100, 50, TRUE, hTop}, "Edit", 0, 0, 0};
 	handles.hBtnEditSave = gwinButtonCreate(0, &btnEditSaveInit);
 
@@ -208,49 +195,44 @@ GHandle SetupCreate()
 	return hTop;
 }
 
-void SetupUpdate(WifiConfig *pWifiConfig, NetworkConfig* pNetworkConfig)
+void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig)
 {
 	if(handles.editModeOn)
 		return;
 
-	data.wifi.channel = pWifiConfig->channel;
-	data.wifi.maxBots = pWifiConfig->maxBots;
-	data.wifi.fixedRuntime = pWifiConfig->fixedRuntime;
-	data.eth.ip = pNetworkConfig->my.ip;
-	data.eth.port = pNetworkConfig->my.port;
-	data.eth.mac = pNetworkConfig->my.mac.u8[5];
-	data.vision.ip = pNetworkConfig->vision.ip;
-	data.vision.port = pNetworkConfig->vision.port;
+	data.wifi.channel = pRadioConfig->channel;
+	data.wifi.maxBots = pRadioConfig->maxBots;
+	data.wifi.fixedRuntime = pRadioConfig->fixedRuntime;
+	data.eth.ip = pBaseConfig->base.ip;
+	data.eth.port = pBaseConfig->base.port;
+	data.vision.ip = pBaseConfig->vision.ip;
+	data.vision.port = pBaseConfig->vision.port;
 
 	static char chBuf[4];
-	snprintf(chBuf, 4, "%3hu", (uint16_t)pWifiConfig->channel);
+	snprintf(chBuf, 4, "%3hu", (uint16_t)data.wifi.channel);
 	gwinSetText(handles.hChannelEdit, chBuf, FALSE);
 
 	static char maxBotsBuf[4];
-	snprintf(maxBotsBuf, 4, "%hu", (uint16_t)pWifiConfig->maxBots);
+	snprintf(maxBotsBuf, 4, "%hu", (uint16_t)data.wifi.maxBots);
 	gwinSetText(handles.hMaxBotsEdit, maxBotsBuf, FALSE);
 
-	gwinCheckboxCheck(handles.hRuntime, pWifiConfig->fixedRuntime ? TRUE : FALSE);
+	gwinCheckboxCheck(handles.hRuntime, data.wifi.fixedRuntime ? TRUE : FALSE);
 
 	static char ethIpBuf[16];
-	snprintf(ethIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)pNetworkConfig->my.ip.u8[0], (uint16_t)pNetworkConfig->my.ip.u8[1],
-			(uint16_t)pNetworkConfig->my.ip.u8[2], (uint16_t)pNetworkConfig->my.ip.u8[3]);
+	snprintf(ethIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)data.eth.ip.u8[0], (uint16_t)data.eth.ip.u8[1],
+			(uint16_t)data.eth.ip.u8[2], (uint16_t)data.eth.ip.u8[3]);
 	gwinSetText(handles.hEthIp, ethIpBuf, FALSE);
 
 	static char ethPortBuf[6];
-	snprintf(ethPortBuf, 6, "%hu", pNetworkConfig->my.port);
+	snprintf(ethPortBuf, 6, "%hu", data.eth.port);
 	gwinSetText(handles.hEthPort, ethPortBuf, FALSE);
 
-	static char ethMacBuf[3];
-	snprintf(ethMacBuf, 3, "%hu", (uint16_t)pNetworkConfig->my.mac.u8[5]);
-	gwinSetText(handles.hEthMac, ethMacBuf, FALSE);
-
 	static char visionIpBuf[16];
-	snprintf(visionIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)pNetworkConfig->vision.ip.u8[0], (uint16_t)pNetworkConfig->vision.ip.u8[1],
-			(uint16_t)pNetworkConfig->vision.ip.u8[2], (uint16_t)pNetworkConfig->vision.ip.u8[3]);
+	snprintf(visionIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)data.vision.ip.u8[0], (uint16_t)data.vision.ip.u8[1],
+			(uint16_t)data.vision.ip.u8[2], (uint16_t)data.vision.ip.u8[3]);
 	gwinSetText(handles.hVisionIp, visionIpBuf, FALSE);
 
 	static char visionPortBuf[6];
-	snprintf(visionPortBuf, 6, "%hu", pNetworkConfig->vision.port);
+	snprintf(visionPortBuf, 6, "%hu", data.vision.port);
 	gwinSetText(handles.hVisionPort, visionPortBuf, FALSE);
 }

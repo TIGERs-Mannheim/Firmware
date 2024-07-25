@@ -6,7 +6,7 @@
  */
 
 #include "main.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include "adc.h"
 #include <string.h>
 
@@ -25,10 +25,10 @@ static volatile uint8_t txBusy = 0;
 void USART1_IRQHandler()
 {
 	uint32_t sr = USART1->ISR;
-	if(sr & USART_ISR_IDLE)
+	if(sr & USART_ISR_FE)
 	{
 		DMA1_Channel3->CCR &= ~DMA_CCR_EN;
-		USART1->ICR = USART_ICR_IDLECF;
+		USART1->ICR = USART_ICR_FECF | USART_ICR_NCF | USART_ICR_ORECF;
 
 		rxSlots[activeSlot].length = USART1_RX_SIZE - DMA1_Channel3->CNDTR;
 		++activeSlot;
@@ -82,8 +82,8 @@ void USART1Init()
 
 	DMA1->IFCR = DMA_IFCR_CGIF2 | DMA_IFCR_CGIF3;
 
-	USART1->ICR = USART_ICR_IDLECF;
-	USART1->CR1 |= USART_CR1_IDLEIE;
+	USART1->ICR = USART_ICR_FECF | USART_ICR_NCF | USART_ICR_ORECF;
+	USART1->CR3 |= USART_CR3_EIE;
 	DMA1_Channel3->CCR |= DMA_CCR_EN;
 
 	irqTable[USART1_IRQn] = &USART1_IRQHandler;

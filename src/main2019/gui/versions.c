@@ -1,13 +1,7 @@
-/*
- * versions.c
- *
- *  Created on: 01.07.2019
- *      Author: AndreR
- */
-
 #include "versions.h"
 #include "version.h"
-#include "util/boot.h"
+#include "util/test.h"
+#include "test_data.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -18,6 +12,7 @@ static struct _handles
 	GHandle hIrVersion;
 	GHandle hExtVersion;
 	GHandle hExtBuildDate;
+	GHandle hBtnBatStorage;
 } handles;
 
 static GHandle createLabel(coord_t x, coord_t y, coord_t w, coord_t h, GHandle parent, const char* pText)
@@ -26,28 +21,45 @@ static GHandle createLabel(coord_t x, coord_t y, coord_t w, coord_t h, GHandle p
 	return gwinLabelCreate(0, &deviceLabelInit);
 }
 
+static int16_t eventHandler(GEvent* pEvent)
+{
+	if(pEvent->type == GEVENT_GWIN_BUTTON)
+	{
+		GEventGWinButton* pBtn = (GEventGWinButton*)pEvent;
+
+		if(pBtn->gwin == handles.hBtnBatStorage)
+		{
+			TestSchedule(TEST_ID_BAT_DISCHARGE, 0, 1);
+		}
+	}
+	return -1;
+}
+
 GHandle VersionsCreate()
 {
-    GWidgetInit wi = { { 0, 60, 240, 260, FALSE, 0 }, "Versions", 0, 0, 0 };
-    GHandle hTop = gwinContainerCreate(0, &wi, 0);
+	GWidgetInit wi = { { 0, 60, 240, 260, FALSE, 0 }, "Versions", 0, &eventHandler, 0 };
+	GHandle hTop = gwinContainerCreate(0, &wi, 0);
 
-    // Main
-    createLabel(5, 5, 70, 20, hTop, "Main:");
-    handles.hMainVersion = createLabel(60, 5, 180, 20, hTop, VersionGetString());
+	// Main
+	createLabel(5, 5, 70, 20, hTop, "Main:");
+	handles.hMainVersion = createLabel(60, 5, 180, 20, hTop, VersionGetString());
 
-    // Sub-Processors
-    createLabel(5, 25, 80, 20, hTop, "Motor:");
-    handles.hMotorVersion = createLabel(60, 25, 180, 20, hTop, "?");
+	// Sub-Processors
+	createLabel(5, 25, 80, 20, hTop, "Motor:");
+	handles.hMotorVersion = createLabel(60, 25, 180, 20, hTop, "?");
 
-    createLabel(5, 45, 80, 20, hTop, "IR:");
-    handles.hIrVersion = createLabel(60, 45, 180, 20, hTop, "?");
+	createLabel(5, 45, 80, 20, hTop, "IR:");
+	handles.hIrVersion = createLabel(60, 45, 180, 20, hTop, "?");
 
-    // Ext
-    createLabel(5, 100, 80, 15, hTop, "Ext:");
-    handles.hExtVersion = createLabel(60, 100, 180, 15, hTop, "?");
-    handles.hExtBuildDate = createLabel(60, 120, 180, 15, hTop, "?");
+	// Ext
+	createLabel(5, 100, 80, 15, hTop, "Ext:");
+	handles.hExtVersion = createLabel(60, 100, 180, 15, hTop, "?");
+	handles.hExtBuildDate = createLabel(60, 120, 180, 15, hTop, "?");
 
-    return hTop;
+	GWidgetInit btnStorage = { { 150, 210, 100, 50, TRUE, hTop }, "Bat Storage", 0, 0, 0 };
+	handles.hBtnBatStorage = gwinButtonCreate(0, &btnStorage);
+
+	return hTop;
 }
 
 void VersionsUpdateExt(ExtRobotPiVersion* pRobotPiVersion, uint8_t installed)

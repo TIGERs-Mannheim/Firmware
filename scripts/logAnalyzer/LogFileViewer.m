@@ -44,6 +44,7 @@ uimenu(m, 'Label', 'Dribbler Details', 'Callback', @showDribbler);
 uimenu(m, 'Label', 'Network Statistics', 'Callback', @showNetStats);
 uimenu(m, 'Label', 'Power Consumption', 'Callback', @showPower);
 uimenu(m, 'Label', 'IR Array', 'Callback', @showIRArray);
+uimenu(m, 'Label', 'Ball Dribbling', 'Callback', @showBallDribbling);
 uimenu(m, 'Label', 'Robot Task Timings', 'Callback', @showTimings);
 
 showLocalVelocity2(0, 0);
@@ -774,15 +775,16 @@ function showKickerDribbler(~, ~)
     
 	sp4 = subplot(2, 2, 4);
 	plot(sampleTimes, skill.dribbler.speed, 'g--', ...
-        sampleTimes, in.dribbler.speed, 'b-');
-	legend('Ref', 'Real');
+        sampleTimes, in.dribbler.speed, 'b-', ...
+        sampleTimes, state.drib.vel, 'r-');
+	legend('Ref', 'Measured', 'State');
 	title('Dribbler');
 	xlabel('t [s]');
-	ylabel('v [RPM]');
+	ylabel('v [m/s]');
 	axis tight
     grid on
     grid minor
-	ylim([-5000 20000]);
+	ylim([-1 10]);
     
     linkaxes([sp1, sp2, sp3, sp4], 'x');
 end
@@ -796,11 +798,11 @@ function showDribbler(~, ~)
 	legend('Ref', 'Hall', 'Model', 'State');
 	title('Dribbler Speed');
 	xlabel('t [s]');
-	ylabel('v [rad/s]');
+	ylabel('v [m/s]');
 	axis tight
     grid on
     grid minor
-	ylim([-500 2500]);
+	ylim([-1 10]);
     
 	sp2 = subplot(2, 2, 2);
 	plot(sampleTimes, in.dribbler.temp, 'b-');
@@ -815,8 +817,8 @@ function showDribbler(~, ~)
     sp3 = subplot(2, 2, 3);
 	plot(sampleTimes, in.dribbler.current, 'b-', ...
         sampleTimes, state.drib.cur, 'k-', ...
-        sampleTimes, skill.dribbler.maxCurrent, 'r-');
-	legend('Real', 'State', 'Limit');
+        sampleTimes, out.drib.cur, 'r-');
+	legend('Measured', 'State', 'Ref');
 	title('Dribbler Current');
 	xlabel('t [s]');
 	ylabel('I [A]');
@@ -907,24 +909,151 @@ function showNetStats(~, ~)
 end
 
 function showIRArray(~, ~)
-    subplot(1, 1, 1);
-    
-    xCol = strcmp(logData.sensors.names, 'ir_ball_est_x');
-    yCol = strcmp(logData.sensors.names, 'ir_ball_est_y');
-    detectCol = strcmp(logData.sensors.names, 'ir_ballDetected');
+    sp1 = subplot(2, 2, 1);
+    plot(sampleTimes, in.ir.pos(:,1), 'b-', ...
+         sampleTimes, in.barrier.irq*7, 'g-', ...
+         sampleTimes, in.ir.state*8, 'c-');
+    legend('Sensor', 'Interrupted', 'Detected');
+    title('X Position');
+	xlabel('t [s]');
+	ylabel('x [mm]');
+	axis tight
+    grid on
+    grid minor  
 
-    detect = logical(logData.sensors.data(:,detectCol));
+    sp2 = subplot(2, 2, 2);
+    plot(sampleTimes, in.ir.pos(:,1), 'b--', ...
+         sampleTimes, in.ir.pos(:,2), 'm--', ...
+         sampleTimes, in.barrier.irq*7, 'g-', ...
+         sampleTimes, in.ir.state*8, 'c-');
+    legend('X Sensor', 'Y Sensor', 'Interrupted', 'Detection');
+    title('XY Position');
+	xlabel('t [s]');
+	ylabel('p [mm]');
+	axis tight
+    grid on
+    grid minor  
 
-    x = logData.sensors.data(:,xCol);
-    y = logData.sensors.data(:,yCol);
+    sp3 = subplot(2, 2, 3);
+    plot(sampleTimes, in.ir.pos(:,2), 'b-', ...
+         sampleTimes, in.barrier.irq*7, 'g-', ...
+         sampleTimes, in.ir.state*8, 'c-');
+	legend('Sensor', 'Interrupted', 'Detected');
+    title('Y Position');
+	xlabel('t [s]');
+	ylabel('y [mm]');
+	axis tight
+    grid on
+    grid minor
 
-    
-    plot(x(detect), y(detect));
-    xlim([-35 35]);
-    ylim([15 50]);
-    title('Ball Position Estimation');
-    xlabel('X-Coordinate [mm]');
-    ylabel('Y-Coordinate [mm]');
+    sp4 = subplot(2, 2, 4);
+	plot([sampleTimes(1) sampleTimes(end)], [0 1], 'k-', ...
+        [sampleTimes(1) sampleTimes(end)], [1 0], 'k-');
+	title('-');
+    axis tight
+
+    linkaxes([sp1, sp2, sp3, sp4], 'x');
+end
+
+function showBallDribbling(~, ~)
+    sp1 = subplot(4, 2, 1);
+    plot(sampleTimes, in.ir.pos(:,1), 'b-', ...
+         sampleTimes, state.ball.pos(:,1)*1e3, 'k-', ...
+         sampleTimes, in.barrier.irq*4, 'g-', ...
+         sampleTimes, state.ball.state*5, 'r--');
+    legend('IR Array', 'Model Est', 'Interrupted', 'Dribbling State');
+    title('Ball X Position');
+	xlabel('t [s]');
+	ylabel('x [mm]');
+	axis tight
+    grid on
+    grid minor  
+    ylim([-50 50]);
+
+    sp2 = subplot(4, 2, 2);
+
+	plot(sampleTimes, ref.vel.local(:,1), 'c--', ...
+        sampleTimes, state.vel.local(:,1), 'b-', ...
+        sampleTimes, ref.vel.local(:,2), 'm--', ...
+        sampleTimes, state.vel.local(:,2), 'r-');
+    legend('X Traj', 'X Vel', 'Y Traj', 'Y Vel');
+    title('Local Velocity');
+	xlabel('t [s]');
+	ylabel('v [m/s]');
+	axis tight
+    grid on
+    grid minor
+
+    sp3 = subplot(4, 2, 3);
+    plot(sampleTimes, state.ball.vel(:,1), 'b-');
+    title('Ball X Velocity');
+	xlabel('t [s]');
+	ylabel('x [mm/s]');
+	axis tight
+    grid on
+    grid minor  
+
+    sp4 = subplot(4, 2, 4);
+	plot(sampleTimes, ref.vel.local(:,3), 'c--', ...
+        sampleTimes, state.vel.local(:,3), 'b-');
+	legend('Traj', 'State');
+	title('Rotational Velocity');
+	xlabel('t [s]');
+	ylabel('v [rad/s]');
+	axis tight
+    grid on
+    grid minor
+	ylim([-30 30]);
+
+    sp5 = subplot(4, 2, 5);
+    plot(sampleTimes, state.drib.force, 'b-', ...
+        sampleTimes, ref.drib.maxForce, 'k-', ...
+        sampleTimes, skill.dribbler.maxForce, 'r-');
+	legend('State', 'Ref', 'Skill Output');
+	title('Dribbler Force');
+	xlabel('t [s]');
+	ylabel('F [N]');
+	axis tight
+    grid on
+    grid minor
+
+    sp6 = subplot(4, 2, 6);
+    plot(sampleTimes, state.drib.vel, 'b-', ...
+        sampleTimes, ref.drib.vel, 'k-', ...
+        sampleTimes, skill.dribbler.speed, 'r-');
+	legend('State', 'Ref', 'Skill Output');
+	title('Dribbler Speed');
+	xlabel('t [s]');
+	ylabel('v [m/s]');
+	axis tight
+    grid on
+    grid minor
+	ylim([-1 10]);
+
+    sp7 = subplot(4, 2, 7);
+    refAccXY = sqrt(ref.acc.local(:,1).^2 + ref.acc.local(:,2).^2);
+    plot(sampleTimes, refAccXY, 'k-', ...
+        sampleTimes, skill.lim.accXY, 'b-');
+	legend('Ref', 'Skill Output');
+	title('Acceleration Limit XY');
+	xlabel('t [s]');
+	ylabel('a [m/s^{2}]');
+	axis tight
+    grid on
+    grid minor
+
+    sp8 = subplot(4, 2, 8);
+    plot(sampleTimes, ref.acc.local(:,3), 'k-', ...
+        sampleTimes, skill.lim.accW, 'b-');
+	legend('Ref', 'Skill Output');
+	title('Acceleration Limit W');
+	xlabel('t [s]');
+	ylabel('a [rad/s^{2}]');
+	axis tight
+    grid on
+    grid minor
+
+    linkaxes([sp1, sp2, sp3, sp4, sp5, sp6, sp7, sp8], 'x');
 end
 
 function showPower(~, ~)

@@ -8,7 +8,7 @@
 #pragma once
 
 #include "log_msgs.h"
-#include "pi_ctrl_s12.h"
+#include "math/pi_ctrl_s12.h"
 
 #define TOGGLE_PRIMARY_LED() GPIOB->ODR ^= GPIO_ODR_7
 

@@ -30,6 +30,7 @@ add_compile_options(
     -Werror-implicit-function-declaration
     -Wno-format
     -Wno-duplicate-decl-specifier
+    -Wno-address-of-packed-member
     -Werror=discarded-qualifiers
     -Werror=array-bounds
     -Werror=incompatible-pointer-types

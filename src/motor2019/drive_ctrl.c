@@ -54,7 +54,7 @@ per 1ms              ^          +----+                    ^                  +--
 PI Controller Input/Output: +-4096
 
 D/Q Input: +-10800mA
-D/Q Output: +-32768mV
+D/Q Output: +-16384mV
 D/Q Control Rate: 20kHz
 
 Speed Input: +-2048 encoder ticks per 1ms
@@ -64,7 +64,7 @@ Speed Control Rate: 1kHz
 
 #include "main.h"
 #include "adc.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include "drive_ctrl.h"
 #include "drive_motor.h"
 
@@ -131,7 +131,7 @@ void DriveCtrlInit()
 
 	PICtrlS12Init(&data.ctrl.currentD, 0, 0, -512, 512);
 	PICtrlS12Init(&data.ctrl.currentQ, 0, 0, -512, 512);
-	PICtrlS12Init(&data.ctrl.speed, 0, 0, -4096, 4095);
+	PICtrlS12Init(&data.ctrl.speed, 0, 0, -3420, 3420);
 
 	driveCtrl.lastHallPos = HALL_GET_POS();
 
@@ -242,11 +242,11 @@ void DriveCtrlUpdate()
 			q_S12_0 = (q_S12_0*24855) >> 16; // Input +-10800mA, scale down  to +-4096
 			q_S12_0 += data.ctrl.speed.output;
 
-			// limit Q setpoint to +-10.35A
-			if(q_S12_0 > 3925)
-				q_S12_0 = 3925;
-			else if(q_S12_0 < -3925)
-				q_S12_0 = -3925;
+			// limit Q setpoint to +-9.02A
+			if(q_S12_0 > 3420)
+				q_S12_0 = 3420;
+			else if(q_S12_0 < -3420)
+				q_S12_0 = -3420;
 
 			PICtrlS12Setpoint(&data.ctrl.currentQ, q_S12_0);
 
@@ -409,7 +409,7 @@ void DriveCtrlUpdatePerPWMCycle()
 				int32_t encAngleCorrection = (int16_t)(hallAngle_U16_0 - encAngle_U16_0);
 
 				// exponential moving average filter:
-				data.sensors.encoder.correction = (15*data.sensors.encoder.correction + encAngleCorrection) >> 4;
+				data.sensors.encoder.correction = (31*data.sensors.encoder.correction + encAngleCorrection) >> 5;
 
 				// compensate for missing encoder ticks
 				if(data.sensors.encoder.correction > 10923)
@@ -462,33 +462,33 @@ void DriveCtrlUpdatePerPWMCycle()
 	data.sensors.adc.currentDQ_S16_0[0] = (cos_S0_15*currentAlpha_Q16_0 + sin_S0_15*currentBeta_Q16_0) >> 15;
 	data.sensors.adc.currentDQ_S16_0[1] = (-sin_S0_15*currentAlpha_Q16_0 + cos_S0_15*currentBeta_Q16_0) >> 15;
 
-	if(overcurrent)
-	{
-		if(data.ctrl.hallOnly)
-		{
-			if(data.motor.mode == MOTOR_MODE_VOLT_DQ)
-			{
-				// convert Udq to Uab
-				data.motor.Uab[0] = (cos_S0_15*data.motor.Udq[0] - sin_S0_15*data.motor.Udq[1]) >> 15;
-				data.motor.Uab[1] = (sin_S0_15*data.motor.Udq[0] + cos_S0_15*data.motor.Udq[1]) >> 15;
-
-				DriveMotorSetAlphaBeta(data.motor.Uab[0], data.motor.Uab[1]);
-			}
-			else if(data.motor.mode == MOTOR_MODE_VOLT_AB)
-			{
-				DriveMotorSetAlphaBeta(data.motor.Uab[0], data.motor.Uab[1]);
-			}
-			else
-			{
-				DriveMotorSetAlphaBeta(0, 0);
-			}
-		}
-		else
-		{
-			DriveMotorSetAlphaBeta(0, 0);
-		}
-	}
-	else
+//	if(overcurrent)
+//	{
+//		if(data.ctrl.hallOnly)
+//		{
+//			if(data.motor.mode == MOTOR_MODE_VOLT_DQ)
+//			{
+//				// convert Udq to Uab
+//				data.motor.Uab[0] = (cos_S0_15*data.motor.Udq[0] - sin_S0_15*data.motor.Udq[1]) >> 15;
+//				data.motor.Uab[1] = (sin_S0_15*data.motor.Udq[0] + cos_S0_15*data.motor.Udq[1]) >> 15;
+//
+//				DriveMotorSetAlphaBeta(data.motor.Uab[0], data.motor.Uab[1]);
+//			}
+//			else if(data.motor.mode == MOTOR_MODE_VOLT_AB)
+//			{
+//				DriveMotorSetAlphaBeta(data.motor.Uab[0], data.motor.Uab[1]);
+//			}
+//			else
+//			{
+//				DriveMotorSetAlphaBeta(0, 0);
+//			}
+//		}
+//		else
+//		{
+//			DriveMotorSetAlphaBeta(0, 0);
+//		}
+//	}
+//	else
 	{
 		PICtrlS12Update(&data.ctrl.currentD, (data.sensors.adc.currentDQ_S16_0[0]*24855) >> 16);
 		PICtrlS12Update(&data.ctrl.currentQ, (data.sensors.adc.currentDQ_S16_0[1]*24855) >> 16);
@@ -499,7 +499,7 @@ void DriveCtrlUpdatePerPWMCycle()
 			data.ctrl.currentD.output = data.motor.Udq[0] >> 2;
 
 		if(data.ctrl.currentQ.enabled)
-			data.motor.Udq[1] = data.ctrl.currentQ.output << 2;
+			data.motor.Udq[1] = data.ctrl.currentQ.output << 2; // TODO: max is set to supplyV >> 3, range too small?
 		else
 			data.ctrl.currentQ.output = data.motor.Udq[1] >> 2;
 

@@ -1,22 +1,19 @@
-/*
- * test_imu.c
- *
- *  Created on: 21.05.2022
- *      Author: AndreR
- */
-
 #include "test_imu.h"
 
-#include "test.h"
 #include "arm_math.h"
-#include "util/arm_mat_util_f32.h"
-#include "util/signal_statistics.h"
-#include "util/console.h"
-#include "spi4.h"
+#include "math/arm_mat_util_f32.h"
+#include "math/signal_statistics.h"
+#include "tiger_bot.h"
+#include "dev/mag.h"
+#include "dev/imu.h"
+#include "test_data.h"
+#include "test_common.h"
+#include "util/test.h"
+#include <stdio.h>
 
 #define IMU_CALIB_NUM_SAMPLES 9
 
-void TestImuCalib()
+static void testImuCalib()
 {
 	static const char* positionNames[] = {
 			"Standing", "Front-Right Wheel down", "Rear-Right Wheel down",
@@ -28,13 +25,13 @@ void TestImuCalib()
 	SignalStatistics statTempImu = { 0 };
 	SignalStatistics statTempMag = { 0 };
 
-	ConsolePrint("Waiting for IMU temperature to settle, this can take few minutes.\r\n");
+	printf("Waiting for IMU temperature to settle, this can take few minutes.\r\n");
 
 	uint8_t tempUnstable = 1;
 	while(tempUnstable)
 	{
 		systime_t prev = chVTGetSystemTimeX();
-		systime_t next = prev+US2ST(1000);
+		systime_t next = prev+TIME_US2I(1000);
 
 		SignalStatisticsReset(&statTempImu);
 
@@ -42,23 +39,23 @@ void TestImuCalib()
 		{
 			chThdSleepUntilWindowed(prev, next);
 			prev = next;
-			next += US2ST(1000);
+			next += TIME_US2I(1000);
 
-			SignalStatisticsSample(&statTempImu, spi4.imu.temp);
+			SignalStatisticsSample(&statTempImu, devImu.meas.temp_degC);
 
 			if(t % 1000 == 0)
-				ConsolePrint(".");
+				printf(".");
 		}
 
 		SignalStatisticsUpdate(&statTempImu);
 
-		ConsolePrint("      % .8f  %.12f  %.8f\r\n", statTempImu.mean, statTempImu.variance, statTempImu.standardDeviation);
+		printf("      % .8f  %.12f  %.8f\r\n", statTempImu.mean, statTempImu.variance, statTempImu.standardDeviation);
 
 		if(statTempImu.standardDeviation < 0.03)
 			tempUnstable = 0;
 	}
 
-	ConsolePrint("Leave the robot steady, acquiring initial signal variances");
+	printf("Leave the robot steady, acquiring initial signal variances");
 
 	// contains gyro and accelerometer mean during static phases
 	static double records[IMU_CALIB_NUM_SAMPLES][9];
@@ -70,31 +67,37 @@ void TestImuCalib()
 	const uint32_t intervalLengths = 3000;
 
 	systime_t prev = chVTGetSystemTimeX();
-	systime_t next = prev+US2ST(1000);
+	systime_t next = prev+TIME_US2I(1000);
 
 	for(uint32_t t = 0; t < numSamples; t++)
 	{
 		chThdSleepUntilWindowed(prev, next);
 		prev = next;
-		next += US2ST(1000);
+		next += TIME_US2I(1000);
 
-		SignalStatisticsSample(&stats[0], spi4.imu.gyr[0]);
-		SignalStatisticsSample(&stats[1], spi4.imu.gyr[1]);
-		SignalStatisticsSample(&stats[2], spi4.imu.gyr[2]);
-		SignalStatisticsSample(&stats[3], spi4.imu.acc[0]);
-		SignalStatisticsSample(&stats[4], spi4.imu.acc[1]);
-		SignalStatisticsSample(&stats[5], spi4.imu.acc[2]);
-		SignalStatisticsSample(&statTempImu, spi4.imu.temp);
-		SignalStatisticsSample(&stats[6], spi4.mag.strength[0]);
-		SignalStatisticsSample(&stats[7], spi4.mag.strength[1]);
-		SignalStatisticsSample(&stats[8], spi4.mag.strength[2]);
-		SignalStatisticsSample(&statTempMag, spi4.mag.temp);
+		ImuICM20689Measurement imu;
+		ImuICM20689Get(&devImu, &imu);
+
+		MagLIS3Measurement mag;
+		MagLIS3Get(&devMag, &mag);
+
+		SignalStatisticsSample(&stats[0], imu.gyr_radDs[0]);
+		SignalStatisticsSample(&stats[1], imu.gyr_radDs[1]);
+		SignalStatisticsSample(&stats[2], imu.gyr_radDs[2]);
+		SignalStatisticsSample(&stats[3], imu.acc_mDs2[0]);
+		SignalStatisticsSample(&stats[4], imu.acc_mDs2[1]);
+		SignalStatisticsSample(&stats[5], imu.acc_mDs2[2]);
+		SignalStatisticsSample(&statTempImu, imu.temp_degC);
+		SignalStatisticsSample(&stats[6], mag.strength_uT[0]);
+		SignalStatisticsSample(&stats[7], mag.strength_uT[1]);
+		SignalStatisticsSample(&stats[8], mag.strength_uT[2]);
+		SignalStatisticsSample(&statTempMag, mag.temp_degC);
 
 		if(t % 1000 == 0)
-			ConsolePrint(".");
+			printf(".");
 	}
 
-	ConsolePrint("done\r\n");
+	printf("done\r\n");
 
 	for(uint8_t i = 0; i < 9; i++)
 	{
@@ -105,26 +108,26 @@ void TestImuCalib()
 	SignalStatisticsUpdate(&statTempImu);
 	SignalStatisticsUpdate(&statTempMag);
 
-	ConsolePrint("Gyro      mean          var.        std.dev.\r\n");
-	ConsolePrint("X     % .8f  %.12f  %.8f\r\n", stats[0].mean, stats[0].variance, stats[0].standardDeviation);
-	ConsolePrint("Y     % .8f  %.12f  %.8f\r\n", stats[1].mean, stats[1].variance, stats[1].standardDeviation);
-	ConsolePrint("Z     % .8f  %.12f  %.8f\r\n", stats[2].mean, stats[2].variance, stats[2].standardDeviation);
+	printf("Gyro      mean          var.        std.dev.\r\n");
+	printf("X     % .8f  %.12f  %.8f\r\n", stats[0].mean, stats[0].variance, stats[0].standardDeviation);
+	printf("Y     % .8f  %.12f  %.8f\r\n", stats[1].mean, stats[1].variance, stats[1].standardDeviation);
+	printf("Z     % .8f  %.12f  %.8f\r\n", stats[2].mean, stats[2].variance, stats[2].standardDeviation);
 
-	ConsolePrint("\r\nAcc       mean          var.        std.dev.\r\n");
-	ConsolePrint("X     % .8f  %.12f  %.8f\r\n", stats[3].mean, stats[3].variance, stats[3].standardDeviation);
-	ConsolePrint("Y     % .8f  %.12f  %.8f\r\n", stats[4].mean, stats[4].variance, stats[4].standardDeviation);
-	ConsolePrint("Z     % .8f  %.12f  %.8f\r\n", stats[5].mean, stats[5].variance, stats[5].standardDeviation);
+	printf("\r\nAcc       mean          var.        std.dev.\r\n");
+	printf("X     % .8f  %.12f  %.8f\r\n", stats[3].mean, stats[3].variance, stats[3].standardDeviation);
+	printf("Y     % .8f  %.12f  %.8f\r\n", stats[4].mean, stats[4].variance, stats[4].standardDeviation);
+	printf("Z     % .8f  %.12f  %.8f\r\n", stats[5].mean, stats[5].variance, stats[5].standardDeviation);
 
-	ConsolePrint("\r\nTemp      mean          var.        std.dev.\r\n");
-	ConsolePrint("      % .8f  %.12f  %.8f\r\n", statTempImu.mean, statTempImu.variance, statTempImu.standardDeviation);
+	printf("\r\nTemp      mean          var.        std.dev.\r\n");
+	printf("      % .8f  %.12f  %.8f\r\n", statTempImu.mean, statTempImu.variance, statTempImu.standardDeviation);
 
-	ConsolePrint("\r\nMag       mean          var.        std.dev.\r\n");
-	ConsolePrint("X     % .8f  %.12f  %.8f\r\n", stats[6].mean, stats[6].variance, stats[6].standardDeviation);
-	ConsolePrint("Y     % .8f  %.12f  %.8f\r\n", stats[7].mean, stats[7].variance, stats[7].standardDeviation);
-	ConsolePrint("Z     % .8f  %.12f  %.8f\r\n", stats[8].mean, stats[8].variance, stats[8].standardDeviation);
+	printf("\r\nMag       mean          var.        std.dev.\r\n");
+	printf("X     % .8f  %.12f  %.8f\r\n", stats[6].mean, stats[6].variance, stats[6].standardDeviation);
+	printf("Y     % .8f  %.12f  %.8f\r\n", stats[7].mean, stats[7].variance, stats[7].standardDeviation);
+	printf("Z     % .8f  %.12f  %.8f\r\n", stats[8].mean, stats[8].variance, stats[8].standardDeviation);
 
-	ConsolePrint("\r\nTemp      mean          var.        std.dev.\r\n");
-	ConsolePrint("      % .8f  %.12f  %.8f\r\n", statTempMag.mean, statTempMag.variance, statTempMag.standardDeviation);
+	printf("\r\nTemp      mean          var.        std.dev.\r\n");
+	printf("      % .8f  %.12f  %.8f\r\n", statTempMag.mean, statTempMag.variance, statTempMag.standardDeviation);
 
 	const double staticThresholdFactor = 8.0;
 	const double staticVarianceThresholds[3] = {
@@ -134,7 +137,7 @@ void TestImuCalib()
 
 	for(uint16_t sample = 1; sample < IMU_CALIB_NUM_SAMPLES; sample++)
 	{
-		ConsolePrint("\r\nPlace the robot in position: %s\r\n", positionNames[sample]);
+		printf("\r\nPlace the robot in position: %s\r\n", positionNames[sample]);
 
 		uint8_t isSteady = 1;
 		while(isSteady)
@@ -143,17 +146,20 @@ void TestImuCalib()
 				SignalStatisticsReset(&stats[i]);
 
 			systime_t prev = chVTGetSystemTimeX();
-			systime_t next = prev+US2ST(1000);
+			systime_t next = prev+TIME_US2I(1000);
 
 			for(uint32_t t = 0; t < intervalLengths; t++)
 			{
 				chThdSleepUntilWindowed(prev, next);
 				prev = next;
-				next += US2ST(1000);
+				next += TIME_US2I(1000);
 
-				SignalStatisticsSample(&stats[3], spi4.imu.acc[0]);
-				SignalStatisticsSample(&stats[4], spi4.imu.acc[1]);
-				SignalStatisticsSample(&stats[5], spi4.imu.acc[2]);
+				ImuICM20689Measurement imu;
+				ImuICM20689Get(&devImu, &imu);
+
+				SignalStatisticsSample(&stats[3], imu.acc_mDs2[0]);
+				SignalStatisticsSample(&stats[4], imu.acc_mDs2[1]);
+				SignalStatisticsSample(&stats[5], imu.acc_mDs2[2]);
 			}
 
 			for(uint8_t i = 3; i < 6; i++)
@@ -167,7 +173,7 @@ void TestImuCalib()
 			}
 		}
 
-		ConsolePrint("Movement detected, waiting for robot to stabilize...\r\n");
+		printf("Movement detected, waiting for robot to stabilize...\r\n");
 
 		uint8_t isMoving = 1;
 		while(isMoving)
@@ -176,23 +182,29 @@ void TestImuCalib()
 				SignalStatisticsReset(&stats[i]);
 
 			systime_t prev = chVTGetSystemTimeX();
-			systime_t next = prev+US2ST(1000);
+			systime_t next = prev+TIME_US2I(1000);
 
 			for(uint32_t t = 0; t < intervalLengths; t++)
 			{
 				chThdSleepUntilWindowed(prev, next);
 				prev = next;
-				next += US2ST(1000);
+				next += TIME_US2I(1000);
 
-				SignalStatisticsSample(&stats[0], spi4.imu.gyr[0]);
-				SignalStatisticsSample(&stats[1], spi4.imu.gyr[1]);
-				SignalStatisticsSample(&stats[2], spi4.imu.gyr[2]);
-				SignalStatisticsSample(&stats[3], spi4.imu.acc[0]);
-				SignalStatisticsSample(&stats[4], spi4.imu.acc[1]);
-				SignalStatisticsSample(&stats[5], spi4.imu.acc[2]);
-				SignalStatisticsSample(&stats[6], spi4.mag.strength[0]);
-				SignalStatisticsSample(&stats[7], spi4.mag.strength[1]);
-				SignalStatisticsSample(&stats[8], spi4.mag.strength[2]);
+				ImuICM20689Measurement imu;
+				ImuICM20689Get(&devImu, &imu);
+
+				MagLIS3Measurement mag;
+				MagLIS3Get(&devMag, &mag);
+
+				SignalStatisticsSample(&stats[0], imu.gyr_radDs[0]);
+				SignalStatisticsSample(&stats[1], imu.gyr_radDs[1]);
+				SignalStatisticsSample(&stats[2], imu.gyr_radDs[2]);
+				SignalStatisticsSample(&stats[3], imu.acc_mDs2[0]);
+				SignalStatisticsSample(&stats[4], imu.acc_mDs2[1]);
+				SignalStatisticsSample(&stats[5], imu.acc_mDs2[2]);
+				SignalStatisticsSample(&stats[6], mag.strength_uT[0]);
+				SignalStatisticsSample(&stats[7], mag.strength_uT[1]);
+				SignalStatisticsSample(&stats[8], mag.strength_uT[2]);
 			}
 
 			for(uint8_t i = 0; i < 9; i++)
@@ -210,14 +222,14 @@ void TestImuCalib()
 			}
 		}
 
-		ConsolePrint("Sample acquired (%hu/%hu)\r\n", sample+1, IMU_CALIB_NUM_SAMPLES);
+		printf("Sample acquired (%hu/%hu)\r\n", sample+1, IMU_CALIB_NUM_SAMPLES);
 	}
 
-	ConsolePrint("\r\nCalibration complete, raw data:\r\n");
+	printf("\r\nCalibration complete, raw data:\r\n");
 
 	for(uint16_t sample = 0; sample < IMU_CALIB_NUM_SAMPLES; sample++)
 	{
-		ConsolePrint("% .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f\r\n",
+		printf("% .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f\r\n",
 			records[sample][0], records[sample][1], records[sample][2],
 			records[sample][3], records[sample][4], records[sample][5],
 			records[sample][6], records[sample][7], records[sample][8]);
@@ -318,7 +330,7 @@ void TestImuCalib()
 
 	for(uint16_t sample = 0; sample < IMU_CALIB_NUM_ROT_SAMPLES; sample++)
 	{
-		ConsolePrint("\r\nPlease rotate robot by approx. 90 degree\r\n");
+		printf("\r\nPlease rotate robot by approx. 90 degree\r\n");
 
 		uint8_t isSteady = 1;
 		while(isSteady)
@@ -327,19 +339,22 @@ void TestImuCalib()
 				SignalStatisticsReset(&stats[i]);
 
 			systime_t prev = chVTGetSystemTimeX();
-			systime_t next = prev+US2ST(1000);
+			systime_t next = prev+TIME_US2I(1000);
 
 			for(uint32_t t = 0; t < intervalLengths; t++)
 			{
 				chThdSleepUntilWindowed(prev, next);
 				prev = next;
-				next += US2ST(1000);
+				next += TIME_US2I(1000);
 
-				gyroIntegrationZ += (spi4.imu.gyr[2] - gyroBias[2])*0.001f;
+				ImuICM20689Measurement imu;
+				ImuICM20689Get(&devImu, &imu);
 
-				SignalStatisticsSample(&stats[3], spi4.imu.acc[0]);
-				SignalStatisticsSample(&stats[4], spi4.imu.acc[1]);
-				SignalStatisticsSample(&stats[5], spi4.imu.acc[2]);
+				gyroIntegrationZ += (imu.gyr_radDs[2] - gyroBias[2])*0.001f;
+
+				SignalStatisticsSample(&stats[3], imu.acc_mDs2[0]);
+				SignalStatisticsSample(&stats[4], imu.acc_mDs2[1]);
+				SignalStatisticsSample(&stats[5], imu.acc_mDs2[2]);
 			}
 
 			for(uint8_t i = 3; i < 6; i++)
@@ -353,7 +368,7 @@ void TestImuCalib()
 			}
 		}
 
-		ConsolePrint("Movement detected, waiting for robot to stabilize...\r\n");
+		printf("Movement detected, waiting for robot to stabilize...\r\n");
 
 		uint8_t isMoving = 1;
 		while(isMoving)
@@ -362,19 +377,22 @@ void TestImuCalib()
 				SignalStatisticsReset(&stats[i]);
 
 			systime_t prev = chVTGetSystemTimeX();
-			systime_t next = prev+US2ST(1000);
+			systime_t next = prev+TIME_US2I(1000);
 
 			for(uint32_t t = 0; t < intervalLengths; t++)
 			{
 				chThdSleepUntilWindowed(prev, next);
 				prev = next;
-				next += US2ST(1000);
+				next += TIME_US2I(1000);
 
-				gyroIntegrationZ += (spi4.imu.gyr[2] - gyroBias[2])*0.001f;
+				ImuICM20689Measurement imu;
+				ImuICM20689Get(&devImu, &imu);
 
-				SignalStatisticsSample(&stats[3], spi4.imu.acc[0] - accBias[0]);
-				SignalStatisticsSample(&stats[4], spi4.imu.acc[1] - accBias[1]);
-				SignalStatisticsSample(&stats[5], spi4.imu.acc[2] - accBias[2]);
+				gyroIntegrationZ += (imu.gyr_radDs[2] - gyroBias[2])*0.001f;
+
+				SignalStatisticsSample(&stats[3], imu.acc_mDs2[0] - accBias[0]);
+				SignalStatisticsSample(&stats[4], imu.acc_mDs2[1] - accBias[1]);
+				SignalStatisticsSample(&stats[5], imu.acc_mDs2[2] - accBias[2]);
 			}
 
 			for(uint8_t i = 3; i < 6; i++)
@@ -394,14 +412,14 @@ void TestImuCalib()
 			}
 		}
 
-		ConsolePrint("Sample acquired (%hu/%hu)\r\n", sample+1, 4);
+		printf("Sample acquired (%hu/%hu)\r\n", sample+1, 4);
 	}
 
-	ConsolePrint("\r\nRaw data: \r\n");
+	printf("\r\nRaw data: \r\n");
 
 	for(uint16_t sample = 0; sample < IMU_CALIB_NUM_ROT_SAMPLES; sample++)
 	{
-		ConsolePrint("% .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f\r\n",
+		printf("% .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f, % .8f\r\n",
 			records[sample][0], records[sample][1], records[sample][2],
 			records[sample][3], records[sample][4], records[sample][5],
 			records[sample][6], records[sample][7], records[sample][8]);
@@ -436,31 +454,50 @@ void TestImuCalib()
 	accTiltBias[1] = MAT_ELEMENT(matAccx, 3, 0);
 
 	// Output result
-	ConsolePrint("\r\nGyro bias: %.8f, %.8f, %.8f\r\n", gyroBias[0], gyroBias[1], gyroBias[2]);
-	ConsolePrint("Acc bias: %.8f, %.8f, %.8f (%.8f)\r\n", accBias[0], accBias[1], accBias[2], g);
-	ConsolePrint("Acc tilt: %.8f, %.8f\r\n", accTiltBias[0], accTiltBias[1]);
-	ConsolePrint("Temp: %.3f\r\n", statTempImu.mean);
-	ConsolePrint("Mag bias: %.8f, %.8f, %.8f  (% .8f)\r\n", magBias[0], magBias[1], magBias[2], m);
-	ConsolePrint("Temp: %.3f\r\n", statTempMag.mean);
+	printf("\r\nGyro bias: %.8f, %.8f, %.8f\r\n", gyroBias[0], gyroBias[1], gyroBias[2]);
+	printf("Acc bias: %.8f, %.8f, %.8f (%.8f)\r\n", accBias[0], accBias[1], accBias[2], g);
+	printf("Acc tilt: %.8f, %.8f\r\n", accTiltBias[0], accTiltBias[1]);
+	printf("Temp: %.3f\r\n", statTempImu.mean);
+	printf("Mag bias: %.8f, %.8f, %.8f  (% .8f)\r\n", magBias[0], magBias[1], magBias[2], m);
+	printf("Temp: %.3f\r\n", statTempMag.mean);
 
 	if(g > 9.81*1.01 || g < 9.81*0.99)
 	{
-		ConsolePrint("Accelerometer scale off by >1%%. This is BAD!\r\n");
+		printf("Accelerometer scale off by >1%%. This is BAD!\r\n");
 	}
 
 	chThdSleepMilliseconds(100);
 
-	ConsolePrint("\r\n.imuCalib = {\r\n");
-	ConsolePrint("\t.gyrBias = { %.8ff, %.8ff, %.8ff },\r\n", gyroBias[0], gyroBias[1], gyroBias[2]);
-	ConsolePrint("\t.accBias = { %.8ff, %.8ff, %.8ff },\r\n", accBias[0], accBias[1], accBias[2], g);
-	ConsolePrint("\t.accTiltBias = { %.8ff, %.8ff },\r\n", accTiltBias[0], accTiltBias[1]);
-	ConsolePrint("\t.imuCalibTemp =  %.3ff,\r\n", statTempImu.mean);
-	ConsolePrint("\t.magBias = { %.8ff, %.8ff, %.8ff },\r\n", magBias[0], magBias[1], magBias[2], m);
-	ConsolePrint("\t.magCalibTemp = %.3ff,\r\n", statTempMag.mean);
-	ConsolePrint("\t.calibrated = 1\r\n");
-	ConsolePrint("}\r\n");
+	printf("\r\n.imuCalib = {\r\n");
+	printf("\t.gyrBias = { %.8ff, %.8ff, %.8ff },\r\n", gyroBias[0], gyroBias[1], gyroBias[2]);
+	printf("\t.accBias = { %.8ff, %.8ff, %.8ff },\r\n", accBias[0], accBias[1], accBias[2], g);
+	printf("\t.accTiltBias = { %.8ff, %.8ff },\r\n", accTiltBias[0], accTiltBias[1]);
+	printf("\t.imuCalibTemp =  %.3ff,\r\n", statTempImu.mean);
+	printf("\t.magBias = { %.8ff, %.8ff, %.8ff },\r\n", magBias[0], magBias[1], magBias[2], m);
+	printf("\t.magCalibTemp = %.3ff,\r\n", statTempMag.mean);
+	printf("\t.calibrated = 1\r\n");
+	printf("}\r\n");
 
-	ConsolePrint("\r\nThank you for running this calibration, good bye!\r\n");
+	printf("\r\nThank you for running this calibration, good bye!\r\n");
 
 	TestModeExit();
+}
+
+SHELL_CMD(imu_calib, "Calibrate IMU (gyro, accelerometer, magnetometer");
+
+SHELL_CMD_IMPL(imu_calib)
+{
+	(void)pUser; (void)argc; (void)argv;
+
+	TestSchedule(TEST_ID_IMU_CALIB, 0, 1);
+}
+
+void TestImuInit(ShellCmdHandler* pCmdHandler)
+{
+	TestRegister(TEST_ID_IMU_CALIB, &testImuCalib, 0, 0);
+
+	if(pCmdHandler)
+	{
+		ShellCmdAdd(pCmdHandler, imu_calib_command);
+	}
 }

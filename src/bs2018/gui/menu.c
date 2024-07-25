@@ -1,10 +1,3 @@
-/*
- * menu.c
- *
- *  Created on: 02.11.2017
- *      Author: AndreR
- */
-
 #include "menu.h"
 
 static struct _handles

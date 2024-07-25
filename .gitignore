@@ -5,3 +5,5 @@ scripts/logAnalyzer/*.mex*
 *.kdev4
 /build/
 git_version.h
+.idea/
+src/main2019/generated/

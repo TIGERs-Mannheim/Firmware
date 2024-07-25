@@ -1,20 +1,12 @@
-/*
- * presenter.c
- *
- *  Created on: 24.10.2017
- *      Author: AndreR
- */
-
 #include "presenter.h"
-#include "hal/tft.h"
-#include "hal/touch.h"
-#include "hal/rtc.h"
-#include "hal/eth.h"
-#include "util/console.h"
+#include "dev/tft.h"
+#include "dev/touch.h"
+#include "hal/sys_time.h"
+#include "sys/rtc.h"
+#include "base_station.h"
+#include "constants.h"
+#include "sys/eth0.h"
 #include "gfx.h"
-#include "wifi.h"
-#include "network.h"
-#include "hub.h"
 
 #include "gui/ids.h"
 #include "gui/top_bar.h"
@@ -23,6 +15,11 @@
 #include "gui/setup.h"
 
 #define GUI_HEAP_SIZE (40*1024)
+
+static void presenterTask(void*);
+
+Presenter presenter;
+
 memory_heap_t guiHeap;
 uint8_t guiHeapBuffer[GUI_HEAP_SIZE] __attribute__((aligned(sizeof(stkalign_t))));
 
@@ -38,30 +35,34 @@ static struct _handles
 
 static void setupChangedCallback(const SetupData* pSetup)
 {
-	WifiSetChannel(pSetup->wifi.channel);
-	WifiSetFixedRuntime(pSetup->wifi.fixedRuntime);
-	WifiSetMaxBot(pSetup->wifi.channel);
-	WifiSaveConfig();
+	RadioBaseSetChannel(&baseStation.radioBase, pSetup->wifi.channel);
+	RadioBaseSetFixedRuntime(&baseStation.radioBase, pSetup->wifi.fixedRuntime);
+	RadioBaseSetMaxBots(&baseStation.radioBase, pSetup->wifi.maxBots);
+	RadioBaseSaveConfig(&baseStation.radioBase);
 
-	NetworkSetMyIP(pSetup->eth.ip);
-	NetworkSetMyPort(pSetup->eth.port);
-	NetworkSetMyMAC(pSetup->eth.mac);
-
-	NetworkSetVisionIP(pSetup->vision.ip);
-	NetworkSetVisionPort(pSetup->vision.port);
-
-	NetworkSaveConfig();
+	BaseStationSetIp(pSetup->eth.ip);
+	BaseStationSetPort(pSetup->eth.port);
+	BaseStationSetVisionIp(pSetup->vision.ip);
+	BaseStationSetVisionPort(pSetup->vision.port);
 }
 
 void PresenterInit()
 {
 	chHeapObjectInit(&guiHeap, guiHeapBuffer, GUI_HEAP_SIZE);
+
+	chThdCreateStatic(presenter.waTask, sizeof(presenter.waTask), TASK_PRIO_PRESENTER, presenterTask, 0);
 }
 
-void PresenterTask(void* params)
+void PresenterPrintHeapStatus()
 {
-	(void)params;
+	size_t free;
+	size_t fragments = chHeapStatus(&guiHeap, &free, 0);
 
+	printf("Fragments: %u, Free: %u, Core: %u\r\n", fragments, free, chCoreGetStatusX());
+}
+
+static void presenterTask(void*)
+{
 	chRegSetThreadName("Pres");
 
 	gfxInit();
@@ -93,95 +94,68 @@ void PresenterTask(void* params)
 	TopBarSetTitle(((GWidgetObject*)handles.hWindows[currentWindow])->text);
 	gwinSetVisible(handles.hWindows[currentWindow], TRUE);
 
-	uint32_t lastActionUTC = RTCGetUnixTimestamp();
+	uint32_t lastAction_us = SysTimeUSec();
 
-	systime_t last1sCall = chVTGetSystemTimeX();
 	systime_t last50msCall = chVTGetSystemTimeX();
 
-	static PresenterRobotInfo robotInfo[WIFI_MAX_BOTS];
-	for(uint8_t i = 0; i < WIFI_MAX_BOTS; i++)
+	for(uint8_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
 	{
-		robotInfo[i].pFeedback = &hub.robot[i].lastMatchFeedback;
-		robotInfo[i].pRobot = &wifi.bots[i];
-		robotInfo[i].pHub = &hub.robot[i];
+		presenter.robotInfo[i].pRouterClient = &router.bots[i];
+		presenter.robotInfo[i].pVisionObj = &baseStation.vision.robots[i];
+		presenter.robotInfo[i].pRadioClient = &baseStation.radioBase.baseIn[i];
 	}
 
 	while(1)
 	{
 		GEvent* pEvent;
 
-		for(uint8_t i = 0; i < WIFI_MAX_BOTS; i++)
+		for(uint8_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
 		{
-			if(wifi.bots[i].online)
-				lastActionUTC = RTCGetUnixTimestamp();
+			if(baseStation.radioBase.baseIn[i].isOnline)
+				lastAction_us = SysTimeUSec();
 		}
 
-		if(touch.sensor.pressed)
-			lastActionUTC = RTCGetUnixTimestamp();
+		if(touch.sensor.meas.pressed || baseStation.sumatra.isOnline || baseStation.vision.isOnline)
+			lastAction_us = SysTimeUSec();
 
-		if(RTCGetUnixTimestamp() - lastActionUTC > 30)
+		// Dimming logic
+		uint32_t timeSinceLastAction_us = SysTimeUSec() - lastAction_us;
+		if(timeSinceLastAction_us < 15000000)
 		{
-			TFTEnable(0);
+			TFTSetBrightness(255);
+		}
+		else if(timeSinceLastAction_us < 20000000)
+		{
+			TFTSetBrightness(255 - (timeSinceLastAction_us - 15000000) / 22300);
 		}
 		else
 		{
-			TFTEnable(1);
+			TFTSetBrightness(32);
+			lastAction_us = SysTimeUSec() - 30000000;
 		}
 
 		pEvent = geventEventWait(&gl, 5);
 
-		if(chVTTimeElapsedSinceX(last50msCall) > MS2ST(50))
+		if(chVTTimeElapsedSinceX(last50msCall) > TIME_MS2I(50))
 		{
 			last50msCall = chVTGetSystemTimeX();
 
-			RobotStatusPositionFrameUpdate();
-		}
+//			RobotStatusPositionFrameUpdate(); // TODO: re-enable or delete?
 
-		if(chVTTimeElapsedSinceX(last1sCall) > S2ST(1))
-		{
-			last1sCall = chVTGetSystemTimeX();
-
-			TopBarSetEthStats(EthGetStats()->rxBytesProcessed, EthGetStats()->txBytesProcessed);
-			TopBarSetEthLinkStatus(EthGetLinkStatus()->up, EthGetLinkStatus()->speed100M);
-			TopBarSetEthIP(network.cfg.my.ip.u8, network.cfg.my.port);
-			TopBarSetWifiStatus(wifi.cfg.channel, WifiGetNumBotsOnline(), WifiGetLinkQuality());
-			TopBarSetRemotes(network.visionAvailable, network.sumatraAvailable);
+			TopBarSetEthStats(eth0.rates.rxBytesProcessed, eth0.rates.txBytesProcessed);
+			TopBarSetEthLinkStatus(eth0.linkStatus.up, eth0.linkStatus.speed100M);
+			TopBarSetEthIP(baseStation.config.base.ip.u8, baseStation.config.base.port);
+			TopBarSetWifiStatus(baseStation.radioBase.config.channel, RadioBaseGetNumBotsOnline(&baseStation.radioBase), RadioBaseGetLinkQuality(&baseStation.radioBase));
+			TopBarSetRemotes(baseStation.vision.isOnline, baseStation.sumatra.isOnline);
 			TopBarSetTime(RTCGetUnixTimestamp());
 
-			RobotStatusUpdate(robotInfo, network.visionAvailable);
+			RobotStatusUpdate(presenter.robotInfo, baseStation.vision.isOnline);
 
-			SetupUpdate(&wifi.cfg, &network.cfg);
+			SetupUpdate(&baseStation.config, &baseStation.radioBase.config);
 		}
-
 
 		if(pEvent == 0)
-		{
-//			MainStatusWifiUpdate(&network.config);
-//
-//			KdFeedback kd;
-//			kd.barrier.level[0] = kicker.vIrOn*1000.0f;
-//			kd.barrier.level[1] = kicker.vIrOff*1000.0f;
-//			kd.barrier.threshold = kicker.irAutoThreshold*1000.0f;
-////			kd.barrier.threshold = kicker.config.irThreshold*1000.0f;
-//			kd.power.bat = power.vBat;
-//			kd.power.cur = power.iCur;
-//			kd.kicker.cap = kicker.vCap;
-//			kd.kicker.chg = kicker.iChg;
-//			kd.kicker.temp = kicker.tEnv;
-//			MainStatusKdUpdate(&kd);
-//			MainStatusHwIdUpdate(robot.misc.hardwareId);
-//
-//			// Wifi
-//			WifiUpdateConfig(&network.config);
-//			WifiUpdateStatus(&robot.wifiStat);
-//
-//			// Optical
-//			OpticalUpdate(&spi4.mouse[0].motion, 0);
-//			OpticalUpdate(&spi4.mouse[1].motion, 1);
-//			OpticalSpeedUpdate(spi4.opticalSpeed);
-
 			continue;
-		}
 
 		if(TopBarIsMenuClicked(pEvent))
 		{
@@ -215,6 +189,5 @@ void PresenterTask(void* params)
 			gwinSetVisible(handles.hTopBar, TRUE);
 			gwinSetVisible(handles.hWindows[currentWindow], TRUE);
 		}
-
 	}
 }

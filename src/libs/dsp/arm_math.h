@@ -689,7 +689,7 @@ extern "C"
    * @brief C custom defined intrinisic function for only M0 processors
    */
 #if defined(ARM_MATH_CM0_FAMILY)
-  CMSIS_INLINE __STATIC_INLINE q31_t __SSAT(
+/*  CMSIS_INLINE __STATIC_INLINE q31_t __SSAT(
   q31_t x,
   uint32_t y)
   {
@@ -721,7 +721,7 @@ extern "C"
       }
     }
     return (x);
-  }
+  } */
 #endif /* end of ARM_MATH_CM0_FAMILY */
 
 

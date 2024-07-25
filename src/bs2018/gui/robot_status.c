@@ -1,15 +1,8 @@
-/*
- * robot_status.c
- *
- *  Created on: 02.11.2017
- *      Author: AndreR
- */
-
 #include "robot_status.h"
 #include "gui/bot_cover.h"
 #include "gui/styles.h"
 #include "gui/icons.h"
-#include "../hub.h"
+#include "module/radio/radio_settings.h"
 #include <stdio.h>
 
 RobotStatus robotStatus;
@@ -53,8 +46,8 @@ static struct _handles
 	GHandle hState;
 	GHandle hHwId;
 	GHandle hBatProg;
-	GHandle hWifiIcon[2];
-	GHandle hWifiRssi[2];
+	GHandle hWifiIcon;
+	GHandle hWifiRssi;
 	GHandle hKickerProg;
 	GHandle hDribbler;
 	GHandle hBarrier;
@@ -64,8 +57,7 @@ static struct _handles
 	GHandle hFeatMove;
 	GHandle hFeatDribble;
 	GHandle hFeatBarrier;
-	GHandle hFeatMBv2016;
-	GHandle hFeatKDv2017;
+	GHandle hFeatEnergetic;
 	GHandle hFeatExt;
 	GHandle hFeatCover;
 	GHandle hVisionPos;
@@ -76,12 +68,10 @@ static struct _handles
 	GHandle hBtnManualControl;
 	GHandle hControl;
 
-	GHandle hBtnPos;
 	GHandle hBtnVelYW;
 	GHandle hBtnParams;
 	GHandle hBtnKickDribble;
 
-	GHandle hPosCtrl;
 	GHandle hVelCtrl;
 	GHandle hUltraVel;
 	GHandle hParamsCtrl;
@@ -111,79 +101,15 @@ static struct _handles
 
 	ParamIncDec paramKickSpeed;
 	ParamIncDec paramDribbleSpeed;
-	ParamIncDec paramDribbleCurrent;
+	ParamIncDec paramDribbleForce;
 } handles;
 
 static uint8_t lastKickCount = 0xFF;
-
-void RobotStatusPositionFrameUpdate()
-{
-	if(!gwinGetVisible(handles.hPosCtrl))
-		return;
-
-	gwinRedraw(handles.hPosCtrl);
-}
 
 static void gwinButtonDraw_Clean(GWidgetObject *gw, void *param)
 {
 	(void)gw;
 	(void)param;
-}
-
-static void refreshPositionFrame(GWidgetObject* gw, void* param)
-{
-	(void)param;
-	GContainerObject* pCont = (GContainerObject*) gw;
-	GWindowObject* pObj = &pCont->g;
-	coord_t x = pObj->x;
-	coord_t y = pObj->y;
-
-	gdispFillArea(x, y, pObj->width, pObj->height, Green);
-
-	coord_t halfx = pObj->x + pObj->width / 2;
-	coord_t halfy = pObj->y + pObj->height / 2;
-	gdispDrawLine(halfx, y, halfx, y + pObj->height, White);
-
-	if(!hub.field.fieldLength)
-		return;
-
-	float xMultiplier = (float)(pObj->width) / (float) (- hub.field.fieldLength + hub.field.boundaryWidth * -2);
-	float yMultiplier = (float)(pObj->height) / (float) (hub.field.fieldWidth + hub.field.boundaryWidth * 2);
-
-	gdispDrawBox(
-			x - hub.field.boundaryWidth * xMultiplier,
-			y + hub.field.boundaryWidth * yMultiplier,
-			pObj->width + 2 * hub.field.boundaryWidth * xMultiplier,
-			pObj->height - 2 * hub.field.boundaryWidth * yMultiplier,
-			White);
-
-	gdispDrawBox(
-			x - (hub.field.boundaryWidth - hub.field.goalDepth) * xMultiplier,
-			y + (hub.field.boundaryWidth + hub.field.fieldWidth/2 - hub.field.goalWidth/2) * yMultiplier,
-			- hub.field.goalDepth * xMultiplier,
-			hub.field.goalWidth * yMultiplier,
-			White);
-	gdispDrawBox(
-			x - (hub.field.boundaryWidth + hub.field.fieldLength) * xMultiplier,
-			y + (hub.field.boundaryWidth + hub.field.fieldWidth/2 - hub.field.goalWidth/2) * yMultiplier,
-			- hub.field.goalDepth * xMultiplier,
-			hub.field.goalWidth * yMultiplier,
-			White);
-
-	for(uint8_t i = 0; i < WIFI_MAX_BOTS; i++)
-	{
-		if(!hub.robot[i].isOnVision)
-			continue;
-
-		coord_t x = halfx + xMultiplier * hub.robot[i].lastVisionPosFloat[0];
-		coord_t y = halfy + yMultiplier * hub.robot[i].lastVisionPosFloat[1];
-
-		gdispFillCircle(x, y, 15, i <= 11 ? Yellow : Blue);
-
-		char str[3];
-		sprintf(str, "%d", i%16);
-		gdispDrawString(x - 12, y - 8, str, gdispOpenFont("DejaVuSans20"), Black);
-	}
 }
 
 static int16_t eventHandler(GEvent* pEvent)
@@ -236,24 +162,6 @@ static int16_t eventHandler(GEvent* pEvent)
 					robotStatus.ultraState.y = yVel*robotStatus.limits.maxVelXY;
 					robotStatus.ultraState.w = -xVel*robotStatus.limits.maxVelW;
 				}
-			}
-		}
-		else if(gwinGetVisible(handles.hPosCtrl) && (pMouse->buttons & GINPUT_TOUCH_PRESSED))
-		{
-			coord_t x = pMouse->x - gwinGetScreenX(handles.hPosCtrl);
-			coord_t y = pMouse->y - gwinGetScreenY(handles.hPosCtrl);
-			coord_t w = gwinGetWidth(handles.hPosCtrl);
-			coord_t h = gwinGetHeight(handles.hPosCtrl);
-
-			if(x < w && y < h && x > 0 && y > 0 && hub.field.fieldLength)
-			{
-				float xMultiplier = (float) (hub.field.fieldLength + hub.field.boundaryWidth * 2) / (float) w;
-				float yMultiplier = (float) (hub.field.fieldWidth + hub.field.boundaryWidth * 2) / (float) h;
-				robotStatus.ultraState.mode = MOVE_MODE_POS;
-				robotStatus.ultraState.x = (w / 2 - x) * xMultiplier;
-				robotStatus.ultraState.y = (y - h / 2) * yMultiplier;
-				robotStatus.ultraState.w = 0;
-				gwinRedraw(handles.hPosCtrl);
 			}
 		}
 	}
@@ -317,13 +225,6 @@ static int16_t eventHandler(GEvent* pEvent)
 				gwinSetText(handles.hBtnManualControl, "Stop Control", FALSE);
 				robotStatus.manualControlOn = 1;
 			}
-		}
-
-		if(pBtn->gwin == handles.hBtnPos)
-		{
-			gwinHide(*handles.pCurrentControl);
-			gwinShow(handles.hPosCtrl);
-			handles.pCurrentControl = &handles.hPosCtrl;
 		}
 
 		if(pBtn->gwin == handles.hBtnVelYW)
@@ -480,25 +381,25 @@ static int16_t eventHandler(GEvent* pEvent)
 		snprintf(kickSpeedBuf, 16, "%.1fm/s", robotStatus.limits.kickSpeed);
 		gwinSetText(handles.paramKickSpeed.hValue, kickSpeedBuf, FALSE);
 
-		if(pBtn->gwin == handles.paramDribbleSpeed.hBtnDec && robotStatus.limits.dribbleSpeed > 1000.0f)
-			robotStatus.limits.dribbleSpeed -= 1000.0f;
+		if(pBtn->gwin == handles.paramDribbleSpeed.hBtnDec && robotStatus.limits.dribbleSpeed > 1.0f)
+			robotStatus.limits.dribbleSpeed -= 0.5f;
 
-		if(pBtn->gwin == handles.paramDribbleSpeed.hBtnInc && robotStatus.limits.dribbleSpeed < 25000.0f)
-			robotStatus.limits.dribbleSpeed += 1000.0f;
+		if(pBtn->gwin == handles.paramDribbleSpeed.hBtnInc && robotStatus.limits.dribbleSpeed < 10.0f)
+			robotStatus.limits.dribbleSpeed += .5f;
 
 		static char dribblerSpeedBuf[16];
-		snprintf(dribblerSpeedBuf, 16, "%.0fRPM", robotStatus.limits.dribbleSpeed);
+		snprintf(dribblerSpeedBuf, 16, "%.1fm/s", robotStatus.limits.dribbleSpeed);
 		gwinSetText(handles.paramDribbleSpeed.hValue, dribblerSpeedBuf, FALSE);
 
-		if(pBtn->gwin == handles.paramDribbleCurrent.hBtnDec && robotStatus.limits.dribbleCurrent > 1.0f)
-			robotStatus.limits.dribbleCurrent -= 0.5f;
+		if(pBtn->gwin == handles.paramDribbleForce.hBtnDec && robotStatus.limits.dribbleForce > 1.0f)
+			robotStatus.limits.dribbleForce -= 0.5f;
 
-		if(pBtn->gwin == handles.paramDribbleCurrent.hBtnInc && robotStatus.limits.dribbleCurrent < 8.5f)
-			robotStatus.limits.dribbleCurrent += 0.5f;
+		if(pBtn->gwin == handles.paramDribbleForce.hBtnInc && robotStatus.limits.dribbleForce < 10.0f)
+			robotStatus.limits.dribbleForce += 0.5f;
 
-		static char dribblerCurrentBuf[16];
-		snprintf(dribblerCurrentBuf, 16, "%.1fA", robotStatus.limits.dribbleCurrent);
-		gwinSetText(handles.paramDribbleCurrent.hValue, dribblerCurrentBuf, FALSE);
+		static char dribblerForceBuf[16];
+		snprintf(dribblerForceBuf, 16, "%.1fN", robotStatus.limits.dribbleForce);
+		gwinSetText(handles.paramDribbleForce.hValue, dribblerForceBuf, FALSE);
 	}
 
 	return -1;
@@ -528,7 +429,7 @@ static void createOverview(GHandle hTop)
 	GWidgetInit overviewInit = { { 0, 0, 800, 420, TRUE, hTop }, 0, 0, 0, 0 };
 	handles.hOverview = gwinContainerCreate(0, &overviewInit, 0);
 
-	for(uint16_t botId = 0; botId < WIFI_MAX_BOTS; botId++)
+	for(uint16_t botId = 0; botId < RADIO_NUM_ROBOT_CLIENTS; botId++)
 	{
 		uint16_t row = (botId%16)/4;
 		uint16_t column = botId%4 + botId/16*4;
@@ -589,7 +490,7 @@ static void createStatus(GHandle hDetails)
 	GWidgetInit statusInit = { { 5, 5, 215, 350, TRUE, hDetails }, 0, 0, 0, 0 };
 	GHandle hStatus = gwinContainerCreate(0, &statusInit, GWIN_CONTAINER_BORDER);
 
-	handles.hBotId = BotCoverCreate(0, 0, hStatus, 0, 0);
+	handles.hBotId = BotCoverCreate(5, 10, hStatus, 0, 0);
 
 	GWidgetInit stateInit = { { 65, 5, 150, 20, TRUE, hStatus }, "Offline", &gwinLabelDrawJustifiedCenter, 0, 0 };
 	handles.hState = gwinLabelCreate(0, &stateInit);
@@ -597,13 +498,9 @@ static void createStatus(GHandle hDetails)
 	GWidgetInit hwidInit = { { 65, 30, 150, 20, TRUE, hStatus }, "HW ID: 42", &gwinLabelDrawJustifiedCenter, 0, 0 };
 	handles.hHwId = gwinLabelCreate(0, &hwidInit);
 
-    handles.hWifiIcon[0] = IconsCreate(0, 55, hStatus, ICON_WIFI_SMALL, Lime);
-	GWidgetInit wifi0RssiInit = { { 30, 55, 80, 20, TRUE, hStatus }, "-15.0dBm", 0, 0, 0 };
-	handles.hWifiRssi[0] = gwinLabelCreate(0, &wifi0RssiInit);
-
-	handles.hWifiIcon[1] = IconsCreate(110, 55, hStatus, ICON_WIFI_SMALL, Red);
-	GWidgetInit wifi1RssiInit = { { 140, 55, 80, 20, TRUE, hStatus }, "-65.3dBm", 0, 0, 0 };
-	handles.hWifiRssi[1] = gwinLabelCreate(0, &wifi1RssiInit);
+	handles.hWifiIcon = IconsCreate(90, 55, hStatus, ICON_WIFI_SMALL, Red);
+	GWidgetInit wifiRssiInit = { { 120, 55, 80, 20, TRUE, hStatus }, "-65.3dBm", 0, 0, 0 };
+	handles.hWifiRssi = gwinLabelCreate(0, &wifiRssiInit);
 
 	GWidgetInit batLabelInit = { { 0, 85, 65, 20, TRUE, hStatus }, "Battery :", 0, 0, 0 };
 	gwinLabelCreate(0, &batLabelInit);
@@ -656,17 +553,14 @@ static void createStatus(GHandle hDetails)
 	GWidgetInit featBarrierInit = { { 150, 225, 56, 15, TRUE, hStatus }, "Barrier", 0, 0, 0 };
 	handles.hFeatBarrier = gwinLabelCreate(0, &featBarrierInit);
 
-	GWidgetInit featMBv2016Init = { { 10, 245, 56, 15, TRUE, hStatus }, "MBv2016", 0, 0, 0 };
-	handles.hFeatMBv2016 = gwinLabelCreate(0, &featMBv2016Init);
+	GWidgetInit featEnergeticInit = { { 10, 245, 64, 15, TRUE, hStatus }, "Energetic", 0, 0, 0 };
+	handles.hFeatEnergetic = gwinLabelCreate(0, &featEnergeticInit);
 
-	GWidgetInit featKDv2017Init = { { 80, 245, 56, 15, TRUE, hStatus }, "KDv2017", 0, 0, 0 };
-	handles.hFeatKDv2017 = gwinLabelCreate(0, &featKDv2017Init);
+	GWidgetInit featCoverInit = { { 80, 245, 56, 15, TRUE, hStatus }, "Cover", 0, 0, 0 };
+	handles.hFeatCover = gwinLabelCreate(0, &featCoverInit);
 
 	GWidgetInit featExtInit = { { 150, 245, 35, 15, TRUE, hStatus }, "Ext.", 0, 0, 0 };
 	handles.hFeatExt = gwinLabelCreate(0, &featExtInit);
-
-	GWidgetInit featCoverInit = { { 10, 265, 56, 15, TRUE, hStatus }, "Cover", 0, 0, 0 };
-	handles.hFeatCover = gwinLabelCreate(0, &featCoverInit);
 
 	GWidgetInit visionPosLabelInit = { { 0, 285, 65, 15, TRUE, hStatus }, "Vis.Pos.:", 0, 0, 0 };
 	gwinLabelCreate(0, &visionPosLabelInit);
@@ -701,8 +595,8 @@ GHandle RobotStatusCreate()
 	robotStatus.limits.maxVelW = 9.0f;
 	robotStatus.limits.maxAccXY = 2.0f;
 	robotStatus.limits.maxAccW = 30.0f;
-	robotStatus.limits.dribbleSpeed = 10000.0f;
-	robotStatus.limits.dribbleCurrent = 3.0f;
+	robotStatus.limits.dribbleSpeed = 3.0f;
+	robotStatus.limits.dribbleForce = 3.0f;
 	robotStatus.limits.kickSpeed = 4.0f;
 
     font_t curFont = gwinGetDefaultFont();
@@ -730,9 +624,6 @@ GHandle RobotStatusCreate()
 	handles.hBtnManualControl = gwinButtonCreate(0, &btnManualControlInit);
 
 	// Control buttons
-	GWidgetInit btnPosInit = {{115, 365, 100, 50, TRUE, handles.hControl}, "Position", 0, 0, 0};
-	handles.hBtnPos = gwinButtonCreate(0, &btnPosInit);
-
 	GWidgetInit btnVelYWInit = {{225, 365, 100, 50, TRUE, handles.hControl}, "Velocity", 0, 0, 0};
 	handles.hBtnVelYW = gwinButtonCreate(0, &btnVelYWInit);
 
@@ -743,11 +634,6 @@ GHandle RobotStatusCreate()
 	handles.hBtnKickDribble = gwinButtonCreate(0, &btnKickDribbleInit);
 
 	handles.pCurrentControl = &handles.hVelCtrl;
-
-	//Control Pages
-	//Position Control
-	GWidgetInit posCtrlInit = { { 0, 5, 575, 350, FALSE, handles.hControl }, 0, &refreshPositionFrame, 0, 0};
-	handles.hPosCtrl = gwinContainerCreate(0, &posCtrlInit, 0);
 
 	//Velocity Control
 	GWidgetInit velYWCtrlInit = { { 0, 5, 575, 350, TRUE, handles.hControl }, 0, 0, 0, 0 };
@@ -824,7 +710,7 @@ GHandle RobotStatusCreate()
 
 	paramIncDecCreate(&handles.paramDribbleSpeed, handles.hKdCtrl, 280, 5, "Dribble Speed");
 
-	paramIncDecCreate(&handles.paramDribbleCurrent, handles.hKdCtrl, 280, 100, "Dribble Current");
+	paramIncDecCreate(&handles.paramDribbleForce, handles.hKdCtrl, 280, 100, "Dribble Force");
 
 	GWidgetInit btnDribbleInit = {{285, 200, 260, 50, TRUE, handles.hKdCtrl}, "Dribble", 0, 0, 0};
 	handles.hBtnDribble = gwinButtonCreate(0, &btnDribbleInit);
@@ -870,97 +756,106 @@ static void setStateText(GHandle hLabel, uint16_t features)
 
 void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 {
+	static systime_t tLastOverviewUpdate = 0;
+
 	const uint16_t requiredFeatures = SYSTEM_MATCH_FEEDBACK_FEATURE_STRAIGHT |
 			SYSTEM_MATCH_FEEDBACK_FEATURE_CHIP | SYSTEM_MATCH_FEEDBACK_FEATURE_MOVE |
 			SYSTEM_MATCH_FEEDBACK_FEATURE_DRIBBLE | SYSTEM_MATCH_FEEDBACK_FEATURE_BARRIER |
 			SYSTEM_MATCH_FEEDBACK_FEATURE_CHARGE;
 
-	for(uint8_t id = 0; id < WIFI_MAX_BOTS; id++)
+	if(chVTTimeElapsedSinceX(tLastOverviewUpdate) > TIME_S2I(1))
 	{
-		struct _robots *handle = &(handles.robots[id]);
+		tLastOverviewUpdate = chVTGetSystemTimeX();
 
-		if(!(pRobots[id].pHub->isOnVision || pRobots[id].pRobot->online))
+		for(uint8_t id = 0; id < RADIO_NUM_ROBOT_CLIENTS; id++)
 		{
-			gwinSetVisible(handle->hBot, false);
-			continue;
-		}
+			struct _robots *handle = &(handles.robots[id]);
 
-		gwinSetVisible(handle->hBot, true);
+			if(!(pRobots[id].pVisionObj->isRecentlyDetected || pRobots[id].pRadioClient->isOnline))
+			{
+				gwinSetVisible(handle->hBot, false);
+				continue;
+			}
 
-		if(pRobots[id].pHub->isOnVision)
-			IconsSetColor(handle->hVision, Lime);
-		else if(pRobots[id].pRobot->online && visionAvailable)
-			IconsSetColor(handle->hVision, Red);
-		else
-			IconsSetColor(handle->hVision, DarkGray);
+			gwinSetVisible(handle->hBot, true);
 
-		if(!pRobots[id].pRobot->online)
-		{
-			gwinSetText(handle->hState, "Offline", FALSE);
-			gwinSetStyle(handle->hState, &DarkenedWidgetStyle);
-			gwinSetStyle(handle->hBatProg, &DarkenedWidgetStyle);
-			gwinSetStyle(handle->hKickerProg, &DarkenedWidgetStyle);
-			IconsSetColor(handle->hBatIcon, DarkGray);
-			IconsSetColor(handle->hKickerIcon, DarkGray);
-			IconsSetColor(handle->hWifi, DarkGray);
-			IconsSetColor(handle->hFeatures, DarkGray);
-			IconsSetColor(handle->hBarrier, DarkGray);
-
-			continue;
-		}
-		else
-		{
-			gwinSetStyle(handle->hState, &BlackWidgetStyle);
-			gwinSetStyle(handle->hBatProg, &BlackWidgetStyle);
-			gwinSetStyle(handle->hKickerProg, &BlackWidgetStyle);
-		}
-
-		IconsSetColor(handle->hBatIcon, Lime);
-		IconsSetColor(handle->hKickerIcon, Lime);
-		IconsSetColor(handle->hWifi, Lime);
-
-		if(pRobots[id].pFeedback->features >> 12 == 1) // ready?
-		{
-			if((pRobots[id].pFeedback->features & requiredFeatures) == requiredFeatures)
-				IconsSetColor(handle->hFeatures, Lime);
+			if(pRobots[id].pVisionObj->isRecentlyDetected)
+				IconsSetColor(handle->hVision, Lime);
+			else if(pRobots[id].pRadioClient->isOnline && visionAvailable)
+				IconsSetColor(handle->hVision, Red);
 			else
-				IconsSetColor(handle->hFeatures, Red);
+				IconsSetColor(handle->hVision, DarkGray);
+
+			if(!pRobots[id].pRadioClient->isOnline)
+			{
+				gwinSetText(handle->hState, "Offline", FALSE);
+				gwinSetStyle(handle->hState, &DarkenedWidgetStyle);
+				gwinSetStyle(handle->hBatProg, &DarkenedWidgetStyle);
+				gwinSetStyle(handle->hKickerProg, &DarkenedWidgetStyle);
+				IconsSetColor(handle->hBatIcon, DarkGray);
+				IconsSetColor(handle->hKickerIcon, DarkGray);
+				IconsSetColor(handle->hWifi, DarkGray);
+				IconsSetColor(handle->hFeatures, DarkGray);
+				IconsSetColor(handle->hBarrier, DarkGray);
+
+				continue;
+			}
+			else
+			{
+				gwinSetStyle(handle->hState, &BlackWidgetStyle);
+				gwinSetStyle(handle->hBatProg, &BlackWidgetStyle);
+				gwinSetStyle(handle->hKickerProg, &BlackWidgetStyle);
+			}
+
+			IconsSetColor(handle->hBatIcon, Lime);
+			IconsSetColor(handle->hKickerIcon, Lime);
+			IconsSetColor(handle->hWifi, Lime);
+
+			const SystemMatchFeedback* pFeedback = &pRobots[id].pRouterClient->lastMatchFeedback;
+
+			if(pFeedback->features >> 12 == 1) // ready?
+			{
+				if((pFeedback->features & requiredFeatures) == requiredFeatures)
+					IconsSetColor(handle->hFeatures, Lime);
+				else
+					IconsSetColor(handle->hFeatures, Red);
+			}
+			else
+			{
+				IconsSetColor(handle->hFeatures, Gray);
+			}
+
+			if(pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_BARRIER_MASK)
+				IconsSetColor(handle->hBarrier, Red);
+			else
+				IconsSetColor(handle->hBarrier, Lime);
+
+			setStateText(handle->hState, pFeedback->features);
+
+			float batVoltage = pFeedback->batteryLevel*0.1f;
+			snprintf(handle->batText, 8, "%4.1fV", batVoltage);
+			gwinProgressbarSetPosition(handle->hBatProg, pFeedback->batteryPercent);
+			gwinSetText(handle->hBatProg, handle->batText, FALSE);
+
+			snprintf(handle->kickerText, 8, "%huV", (uint16_t)pFeedback->kickerLevel);
+			gwinProgressbarSetRange(handle->hKickerProg, 0, (int)pFeedback->kickerMax);
+			gwinProgressbarSetPosition(handle->hKickerProg, (int)pFeedback->kickerLevel);
+			gwinSetText(handle->hKickerProg, handle->kickerText, FALSE);
 		}
-		else
-		{
-			IconsSetColor(handle->hFeatures, Gray);
-		}
-
-		if(pRobots[id].pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_BARRIER_MASK)
-			IconsSetColor(handle->hBarrier, Red);
-		else
-			IconsSetColor(handle->hBarrier, Lime);
-
-		setStateText(handle->hState, pRobots[id].pFeedback->features);
-
-		float batVoltage = pRobots[id].pFeedback->batteryLevel*0.1f;
-		snprintf(handle->batText, 8, "%4.1fV", batVoltage);
-		gwinProgressbarSetPosition(handle->hBatProg, pRobots[id].pFeedback->batteryPercent);
-		gwinSetText(handle->hBatProg, handle->batText, FALSE);
-
-		snprintf(handle->kickerText, 8, "%huV", (uint16_t)pRobots[id].pFeedback->kickerLevel);
-		gwinProgressbarSetRange(handle->hKickerProg, 0, (int)pRobots[id].pFeedback->kickerMax);
-		gwinProgressbarSetPosition(handle->hKickerProg, (int)pRobots[id].pFeedback->kickerLevel);
-		gwinSetText(handle->hKickerProg, handle->kickerText, FALSE);
 	}
 
-	if(robotStatus.selectedBotId > WIFI_MAX_BOTS)
+	if(robotStatus.selectedBotId > RADIO_NUM_ROBOT_CLIENTS)
 		return;
 
 	PresenterRobotInfo* pSelected = &pRobots[robotStatus.selectedBotId];
+	const SystemMatchFeedback* pFeedback = &pSelected->pRouterClient->lastMatchFeedback;
 
-	if(!pSelected->pRobot->online)
+	if(!pSelected->pRadioClient->isOnline)
 	{
 		gwinSetText(handles.hState, "Offline", FALSE);
 		gwinSetStyle(handles.hState, &BlackWidgetStyle);
 
-		IconsSetColor(handles.hWifiIcon[0], Gray);
-		IconsSetColor(handles.hWifiIcon[1], Gray);
+		IconsSetColor(handles.hWifiIcon, Gray);
 
 		gwinSetStyle(handles.hFeatStraight, &BlackWidgetStyle);
 		gwinSetStyle(handles.hFeatChip, &BlackWidgetStyle);
@@ -968,15 +863,14 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 		gwinSetStyle(handles.hFeatMove,  &BlackWidgetStyle);
 		gwinSetStyle(handles.hFeatDribble, &BlackWidgetStyle);
 		gwinSetStyle(handles.hFeatBarrier, &BlackWidgetStyle);
-		gwinSetStyle(handles.hFeatMBv2016, &BlackWidgetStyle);
-		gwinSetStyle(handles.hFeatKDv2017, &BlackWidgetStyle);
+		gwinSetStyle(handles.hFeatEnergetic, &BlackWidgetStyle);
 		gwinSetStyle(handles.hFeatExt, &BlackWidgetStyle);
 		gwinSetStyle(handles.hFeatCover, &BlackWidgetStyle);
 
 		return;
 	}
 
-	uint8_t kickCount = (pSelected->pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_KICK_MASK) >> 4;
+	uint8_t kickCount = (pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_KICK_MASK) >> 4;
 
 	if(kickCount != lastKickCount)
 	{
@@ -988,61 +882,52 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 		gwinSetText(handles.hBtnKickStraight, "Straight", FALSE);
 	}
 
-	setStateText(handles.hState, pSelected->pFeedback->features);
+	setStateText(handles.hState, pFeedback->features);
 
 	static char hwIdBuf[12];
-	snprintf(hwIdBuf, 12, "HW ID: %hu", (uint16_t)pSelected->pFeedback->hardwareId);
+	snprintf(hwIdBuf, 12, "HW ID: %hu", (uint16_t)pFeedback->hardwareId);
 	gwinSetText(handles.hHwId, hwIdBuf, FALSE);
 
-	static char rssiBuf0[12];
+	static char rssiBuf[12];
+	snprintf(rssiBuf, 12, "%.1fdBm", pSelected->pRadioClient->avgRxRssi_mdBm * 0.001f);
+	gwinSetText(handles.hWifiRssi, rssiBuf, FALSE);
 
-	float bsRssi = pSelected->pRobot->emaRssi[0].value;
-	if(pSelected->pRobot->emaRssi[1].value > bsRssi)
-		bsRssi = pSelected->pRobot->emaRssi[1].value;
+	IconsSetColor(handles.hWifiIcon, Lime);
 
-	snprintf(rssiBuf0, 12, "%.1fdBm", bsRssi);
-	gwinSetText(handles.hWifiRssi[0], rssiBuf0, FALSE);
-
-	static char rssiBuf1[12];
-	snprintf(rssiBuf1, 12, "%.1fdBm", pSelected->pRobot->botRssi.value);
-	gwinSetText(handles.hWifiRssi[1], rssiBuf1, FALSE);
-
-	IconsSetColor(handles.hWifiIcon[0], Lime);
-	IconsSetColor(handles.hWifiIcon[1], Lime);
-
-	float batVoltage = pSelected->pFeedback->batteryLevel*0.1f;
+	float batVoltage = pFeedback->batteryLevel*0.1f;
 	static char batBuf[8];
 	snprintf(batBuf, 8, "%4.1fV", batVoltage);
-	gwinProgressbarSetPosition(handles.hBatProg, pSelected->pFeedback->batteryPercent);
+	gwinProgressbarSetPosition(handles.hBatProg, pFeedback->batteryPercent);
 	gwinSetText(handles.hBatProg, batBuf, FALSE);
 
 	static char kickerBuf[8];
-	snprintf(kickerBuf, 8, "%huV", pSelected->pFeedback->kickerLevel);
-	gwinProgressbarSetRange(handles.hKickerProg, 0, (int)pSelected->pFeedback->kickerMax);
-	gwinProgressbarSetPosition(handles.hKickerProg, (int)pSelected->pFeedback->kickerLevel);
+	snprintf(kickerBuf, 8, "%huV", pFeedback->kickerLevel);
+	gwinProgressbarSetRange(handles.hKickerProg, 0, (int)pFeedback->kickerMax);
+	gwinProgressbarSetPosition(handles.hKickerProg, (int)pFeedback->kickerLevel);
 	gwinSetText(handles.hKickerProg, kickerBuf, FALSE);
 
 	static const char* dribTempText[] = {"Cold", "Warm", "Hot", "Over"};
-	uint8_t dribTempId = (pSelected->pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_DRIB_TEMP_MASK) >> 5;
+	uint8_t dribTempId = (pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_DRIB_TEMP_MASK) >> 5;
 
-	uint16_t dribblerSpeed = (pSelected->pFeedback->dribblerState >> 2) * 500;
-	uint8_t dribblerCurrentBits = ((pSelected->pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_DRIB_CUR_MASK) << 2) | (pSelected->pFeedback->dribblerState & 0x03);
-	float dribblerCurrent = dribblerCurrentBits * 0.25f;
+	float dribblerSpeed = (pFeedback->dribblerState >> 2) * 0.25f;
+
+	static const char* dribStateText[] = {"Off", "Idle", "Low", "High"};
+	uint8_t dribStateId = pFeedback->dribblerState & SYSTEM_MATCH_FEEDBACK_DRIBBLER_STATE_MASK;
 
 	static char dribblerBuf[32];
-	snprintf(dribblerBuf, 32, "%5hd (%s) %.2fA", dribblerSpeed, dribTempText[dribTempId], dribblerCurrent);
+	snprintf(dribblerBuf, 32, "%.2f (%s) %s", dribblerSpeed, dribTempText[dribTempId], dribStateText[dribStateId]);
 	gwinSetText(handles.hDribbler, dribblerBuf, FALSE);
 
-	if(pSelected->pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_BARRIER_MASK)
+	if(pFeedback->flags & SYSTEM_MATCH_FEEDBACK_FLAGS_BARRIER_MASK)
 		gwinSetText(handles.hBarrier, "interrupted", FALSE);
 	else
 		gwinSetText(handles.hBarrier, "clear", FALSE);
 
-	if(pSelected->pHub->isOnVision)
+	if(pSelected->pVisionObj->isRecentlyDetected)
 	{
 		static char visionPosBuf[24];
-		snprintf(visionPosBuf, 24, "%5.2f %5.2f %5.1f", pSelected->pHub->lastVisionPosFloat[0]*0.001f,
-				pSelected->pHub->lastVisionPosFloat[1]*0.001f, pSelected->pHub->lastVisionPosFloat[2]);
+		snprintf(visionPosBuf, 24, "%5.2f %5.2f %5.1f", pSelected->pVisionObj->position_m[0],
+				pSelected->pVisionObj->position_m[1], pSelected->pVisionObj->orientation_rad);
 		gwinSetText(handles.hVisionPos, visionPosBuf, FALSE);
 	}
 	else
@@ -1051,23 +936,22 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 	}
 
 	static char botPosBuf[24];
-	snprintf(botPosBuf, 24, "%5.2f %5.2f %5.1f", pSelected->pFeedback->curPosition[0]*0.001f,
-			pSelected->pFeedback->curPosition[1]*0.001f, pSelected->pFeedback->curPosition[2]*0.001f);
+	snprintf(botPosBuf, 24, "%5.2f %5.2f %5.1f", pFeedback->curPosition[0]*0.001f,
+			pFeedback->curPosition[1]*0.001f, pFeedback->curPosition[2]*0.001f);
 	gwinSetText(handles.hBotPos, botPosBuf, FALSE);
 
 	static char botVelBuf[24];
-	snprintf(botVelBuf, 24, "%5.2f %5.2f %5.1f", pSelected->pFeedback->curVelocity[0]*0.001f,
-			pSelected->pFeedback->curVelocity[1]*0.001f, pSelected->pFeedback->curVelocity[2]*0.001f);
+	snprintf(botVelBuf, 24, "%5.2f %5.2f %5.1f", pFeedback->curVelocity[0]*0.001f,
+			pFeedback->curVelocity[1]*0.001f, pFeedback->curVelocity[2]*0.001f);
 	gwinSetText(handles.hBotVel, botVelBuf, FALSE);
 
-	gwinSetStyle(handles.hFeatStraight, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_STRAIGHT) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatChip, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_CHIP) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatCharge, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_CHARGE) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatMove, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_MOVE) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatDribble, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_DRIBBLE) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatBarrier, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_BARRIER) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatMBv2016, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_V2016) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatKDv2017, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_KICKER_V2017) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatExt, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_EXT_BOARD) ? &GreenTextStyle : &RedTextStyle);
-	gwinSetStyle(handles.hFeatCover, (pSelected->pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_COVER) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatStraight, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_STRAIGHT) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatChip, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_CHIP) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatCharge, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_CHARGE) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatMove, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_MOVE) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatDribble, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_DRIBBLE) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatBarrier, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_BARRIER) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatEnergetic, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_ENERGETIC) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatExt, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_EXT_BOARD) ? &GreenTextStyle : &RedTextStyle);
+	gwinSetStyle(handles.hFeatCover, (pFeedback->features & SYSTEM_MATCH_FEEDBACK_FEATURE_COVER) ? &GreenTextStyle : &RedTextStyle);
 }

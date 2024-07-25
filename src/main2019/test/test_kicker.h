@@ -1,12 +1,5 @@
-/*
- * test_kicker.h
- *
- *  Created on: 21.05.2022
- *      Author: AndreR
- */
-
 #pragma once
 
-#include "intercom_constants.h"
+#include "util/shell_cmd.h"
 
-void TestKicker(TestKickerResult* pResult);
+void TestKickerInit(ShellCmdHandler* pCmdHandler);

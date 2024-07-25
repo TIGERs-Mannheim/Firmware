@@ -69,7 +69,7 @@
  */
 
 #include "main.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 #include "dribbler.h"
 #include "drive.h"
 

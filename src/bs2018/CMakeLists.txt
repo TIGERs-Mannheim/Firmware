@@ -6,77 +6,73 @@ set(RUN_EXEC "${PROJECT_NAME}.elf")
 set(BOOT_EXEC "${PROJECT_NAME}_boot.elf")
 
 include(../../cmake/options.cmake)
-include(../libs/CMakeLists.txt)
+include(../libs/libs.cmake)
+include(../robot/robot.cmake)
+include(../shared/shared.cmake)
 
 list(FILTER gui_SOURCES EXCLUDE REGEX top_bar.c|menu.c)
 list(FILTER robot_SOURCES EXCLUDE REGEX network.c)
 
 list(APPEND bs2018_SOURCES
-    cli.c
-    hub.c
+    base_station.c
     main.c
-    network.c
     presenter.c
-    vision.c
-    wifi.c
+    router.c
+    system.c
+    shell_commands.c
     
     gui/menu.c
     gui/robot_status.c
     gui/setup.c
     gui/top_bar.c
     
-    hal/eth.c
-    hal/led.c
-    hal/rtc.c
-    hal/tft.c
-    hal/touch.c
-    hal/usart1.c
+    sys/eth0.c
+    sys/rtc.c
+    sys/spi3.c
+    sys/tim2.c
+    sys/tim5.c
+    sys/usart1.c
     
-    network/arp.c
-    network/ethernet.c
-    network/icmp.c
-    network/igmpv3.c
-    network/inet.c
-    network/ipv4.c
-    network/sntp.c
-    network/udp.c
+    dev/led.c
+    dev/shell.c
+    dev/sky_fem.c
+    dev/sx1280.c
+    dev/tft.c
+    dev/touch.c
     
-    protobuf-c/messages_robocup_ssl_detection.pb-c.c
-    protobuf-c/messages_robocup_ssl_geometry.pb-c.c
-    protobuf-c/messages_robocup_ssl_geometry_legacy.pb-c.c
-    protobuf-c/messages_robocup_ssl_refbox_log.pb-c.c
-    protobuf-c/messages_robocup_ssl_wrapper.pb-c.c
-    protobuf-c/messages_robocup_ssl_wrapper_legacy.pb-c.c
-    protobuf-c/protobuf-c.c
-    protobuf-c/radio_protocol_command.pb-c.c
-    protobuf-c/radio_protocol_wrapper.pb-c.c
+    misc/inventory.c
     
-    util/wifi_module.c
-    
-    ${common_SOURCES}
+    ${shared_SOURCES}
+    ${net_SOURCES}
     ${f7xx_SOURCES}
     ${robot_SOURCES}
     ${util_SOURCES}
     ${chibios_SOURCES}
     ${ugfx_SSD1963_SOURCES}
     ${gui_SOURCES}
+    ${math_SOURCES}
+    ${protobuf_c_SOURCES}
 )
 
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR}
     
     ${cmsis_core_INCLUDE_DIRS}
-    ${common_INCLUDE_DIRS}
+    ${shared_INCLUDE_DIRS}
     ${f7xx_INCLUDE_DIRS}
     ${util_INCLUDE_DIRS}
     ${dsp_INCLUDE_DIRS}
     ${chibios_INCLUDE_DIRS}
     ${ugfx_SSD1963_INCLUDE_DIRS}
     ${gui_INCLUDE_DIRS}
+    ${robot_INCLUDE_DIRS}
+    ${fatfs_INCLUDE_DIRS}
+    ${protobuf_c_INCLUDE_DIRS}
 )
 
 add_compile_definitions(
     STM32F7XX
+    STM32F767xx
     ARM_MATH_CM7
     __FPU_PRESENT=1
     CORTEX_USE_FPU=1
@@ -109,12 +105,23 @@ target_link_libraries(${RUN_EXEC} c m)
 
 target_link_options(${RUN_EXEC} PRIVATE
     -T${CMAKE_CURRENT_SOURCE_DIR}/run.ld
+    -L${CMAKE_CURRENT_SOURCE_DIR}
+    -L${CMAKE_CURRENT_SOURCE_DIR}/../libs/chibios
     -Wl,-Map=${RUN_EXEC}.map
 )
 
 # Bootloader code
 add_executable(${BOOT_EXEC}
-    ${bs2018_SOURCES}
+    main_bootloader.c
+    system.c
+    
+    sys/tim2.c
+	sys/usart1.c
+	dev/led.c
+    
+    ${chibios_SOURCES}
+    ${util_SOURCES}
+    ${f7xx_SOURCES}
 )
 
 target_compile_definitions(${BOOT_EXEC} PRIVATE
@@ -125,6 +132,8 @@ target_link_libraries(${BOOT_EXEC} c m)
 
 target_link_options(${BOOT_EXEC} PRIVATE
     -T${CMAKE_CURRENT_SOURCE_DIR}/boot.ld
+    -L${CMAKE_CURRENT_SOURCE_DIR}
+    -L${CMAKE_CURRENT_SOURCE_DIR}/../libs/chibios
     -Wl,-Map=${BOOT_EXEC}.map
 )
 

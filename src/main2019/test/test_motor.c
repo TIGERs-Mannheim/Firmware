@@ -1,106 +1,82 @@
-/*
- * test_motor.c
- *
- *  Created on: 21.05.2022
- *      Author: AndreR
- */
-
 #include "test_motor.h"
-#include "test.h"
-#include "power.h"
-#include "motors.h"
-#include "robot/ctrl.h"
-#include "util/ema_filter.h"
-#include "util/console.h"
-#include "util/sys_time.h"
-#include "gui/test_drive.h"
+#include "test_data.h"
+#include "util/test.h"
+#include "math/ema_filter.h"
+#include "hal/sys_time.h"
+#include "dev/motors.h"
+#include "robot/robot.h"
+#include "test_common.h"
+#include "tiger_bot.h"
+#include <stdio.h>
 
-static void doReasoningOnMotor(TestMotorDynamicsResult* pResult);
-static void printTestMotorDynamicsResult(TestMotorDynamicsResult* pResult);
+static void doReasoningOnMotor(TestResultMotIdentMech* pResult);
+static void printTestResultMotIdentMech(TestResultMotIdentMech* pResult);
 
-void TestMotorIdentElectrical(uint8_t motorId)
+static void motorIdentElectricalAtAngle(uint8_t motorId, float electricalAngle_rad)
 {
-	// This test identifies the motor voltage to motor current FOPDT model
-	// and recommends current controller gains for D and Q
-
-	test.expectedTestTime = 3*1000*1000;
-
 	EMAFilter current;
 	EMAFilterInit(&current, 0.95f);
-
-	if(motorId > 4)
-		return;
 
 	float pwmFrequency = 20e3f;
 	if(motorId > 3)
 		pwmFrequency = 40e3f;
 
-	MotorsSingle* pMotor = &motors.motor[motorId];
-
-	ConsolePrint("\r\n### Motor %hu Electrical System Identification ###\r\n", (uint16_t)motorId);
-
-	if(power.usbPowered)
-	{
-		ConsolePrint("Test cannot be performed in USB powered mode!\r\n");
-		return;
-	}
-
-	TestModeStartup();
+	McuMotor* pMotor = &devMotors.mcu[motorId];
 
 	// Step 1: increase voltage until current reaches 8A or 80% of supply voltage, use this voltage as step setpoint
 	float stepVoltage = 0.0f;
-	const float maxVoltage = power.vBat*0.8f;
+	const float maxVoltage = tigerBot.powerControl.vBat*0.8f;
 	const float maxCurrent = 8.0f;
 
 	while(stepVoltage < maxVoltage && current.value < maxCurrent)
 	{
 		stepVoltage += 0.1f;
 
-		MotorsSetElectricalAngle(motorId, 0.0f, stepVoltage);
+		McuMotorSetElectricalAngle(pMotor, electricalAngle_rad, stepVoltage);
 
 		for(uint16_t i = 0; i < 20; i++)
 		{
 			chThdSleepMilliseconds(1);
-			float normCurrent = sqrtf(pMotor->avgCurrentDQ1ms[0]*pMotor->avgCurrentDQ1ms[0] + pMotor->avgCurrentDQ1ms[1]*pMotor->avgCurrentDQ1ms[1]);
+			float normCurrent = sqrtf(pMotor->meas.avgCurrentDQ1ms_A[0]*pMotor->meas.avgCurrentDQ1ms_A[0] + pMotor->meas.avgCurrentDQ1ms_A[1]*pMotor->meas.avgCurrentDQ1ms_A[1]);
 			EMAFilterUpdate(&current, normCurrent);
 		}
 	}
 
-	ConsolePrint("Step voltage: %.3fV\r\n", stepVoltage);
+	printf("\r\nStep voltage: %.3fV, angle: %.1f\r\n", stepVoltage, electricalAngle_rad*180.0f/M_PI);
 
 	// Step 2: use this voltage some more to get a stable average of current
 	for(uint16_t i = 0; i < 500; i++)
 	{
 		chThdSleepMilliseconds(1);
-		float normCurrent = sqrtf(pMotor->avgCurrentDQ1ms[0]*pMotor->avgCurrentDQ1ms[0] + pMotor->avgCurrentDQ1ms[1]*pMotor->avgCurrentDQ1ms[1]);
+		float normCurrent = sqrtf(pMotor->meas.avgCurrentDQ1ms_A[0]*pMotor->meas.avgCurrentDQ1ms_A[0] + pMotor->meas.avgCurrentDQ1ms_A[1]*pMotor->meas.avgCurrentDQ1ms_A[1]);
 		EMAFilterUpdate(&current, normCurrent);
 	}
 
-	ConsolePrint("U: %.3fV, I: %.3fA\r\n", stepVoltage, current.value);
+	printf("U: %.3fV, I: %.3fA\r\n", stepVoltage, current.value);
 
 	const float stepCurrent = current.value;
 
 	// Step 3: Perform step input and record data
-	MotorsSetElectricalAngle(motorId, 0.0f, stepVoltage*0.25f);
+	McuMotorSetElectricalAngle(pMotor, electricalAngle_rad, stepVoltage*0.25f);
 	current.value *= 0.25f;
 	for(uint16_t i = 0; i < 500; i++)
 	{
 		chThdSleepMilliseconds(1);
-		float normCurrent = sqrtf(pMotor->avgCurrentDQ1ms[0]*pMotor->avgCurrentDQ1ms[0] + pMotor->avgCurrentDQ1ms[1]*pMotor->avgCurrentDQ1ms[1]);
+		float normCurrent = sqrtf(pMotor->meas.avgCurrentDQ1ms_A[0]*pMotor->meas.avgCurrentDQ1ms_A[0] + pMotor->meas.avgCurrentDQ1ms_A[1]*pMotor->meas.avgCurrentDQ1ms_A[1]);
 		EMAFilterUpdate(&current, normCurrent);
 	}
 
 	const float startCurrent = current.value;
 
-	ConsolePrint("U: %.3fV, I: %.3fA\r\n", stepVoltage*0.25f, startCurrent);
+	printf("U: %.3fV, I: %.3fA\r\n", stepVoltage*0.25f, startCurrent);
 
-	MotorsDebugRecord(motorId, MOTOR_EXCHANGE_MOSI_RECORD_VOLT_AB_CUR_DQ);
+	McuMotorDebugRecord(pMotor, MOTOR_EXCHANGE_MOSI_RECORD_VOLT_AB_CUR_DQ, 1);
 	chThdSleepMilliseconds(50);
 
-	MotorsSetElectricalAngle(motorId, 0.0f, stepVoltage);
+	McuMotorSetElectricalAngle(pMotor, electricalAngle_rad, stepVoltage);
 	chThdSleepMilliseconds(500);
 
-	MotorsSetOff(motorId);
+	McuMotorSetOff(pMotor);
 
 	// Step 4: do system identification
 	const float plantGain = stepCurrent / stepVoltage;
@@ -110,7 +86,9 @@ void TestMotorIdentElectrical(uint8_t motorId)
 	const float currentT2 = (0.865f*(stepCurrent-startCurrent) + startCurrent);
 
 	arm_matrix_instance_q15 recordData;
-	MotorsDebugGetRecord(&recordData);
+	recordData.numRows = pMotor->recordCounter;
+	recordData.numCols = 2;
+	recordData.pData = pMotor->pRecordData;
 
 	uint16_t indexStep = 0;
 	uint16_t indexAboveT2 = 0;
@@ -139,7 +117,7 @@ void TestMotorIdentElectrical(uint8_t motorId)
 
 	if(indexStep == 0 || indexAboveT2 == 0)
 	{
-		ConsolePrint("Unable to identify step in recorded data\r\n");
+		fprintf(stderr, "Unable to identify step in recorded data\r\n");
 		TestModeExit();
 		return;
 	}
@@ -153,26 +131,55 @@ void TestMotorIdentElectrical(uint8_t motorId)
 	float motorResistance = 1.0f/plantGain;
 	float motorInductance = plantTimeConstant*motorResistance;
 
-	ConsolePrint("Plant: K: %.3f, T: %.7fs, d: %.6fs\r\n", plantGain, plantTimeConstant, plantDeadTime);
-	ConsolePrint("Motor: R: %.3f\u2126, L: %.8fH\r\n", motorResistance, motorInductance);
+	printf("Plant: K: %.3f, T: %.7fs, d: %.6fs\r\n", plantGain, plantTimeConstant, plantDeadTime);
+	printf("Motor: R: %.3f\u2126, L: %.8fH\r\n", motorResistance, motorInductance);
 
 	// Step 5: compute controller gains
 	float Kp[2] = { 0.55f*plantTimeConstant/(dt*plantGain), 0.2f*plantTimeConstant/(dt*plantGain) };
 	float Ti[2] = { 1.0f*plantTimeConstant, 1.0f*plantTimeConstant };
 	float Ki[2] = { Kp[0]/(Ti[0]*pwmFrequency), Kp[1]/(Ti[1]*pwmFrequency) };
 
-	ConsolePrint("D Ctrl: Kp: %.3f, Ki: %.4f\r\n", Kp[0], Ki[0]);
-	ConsolePrint("Q Ctrl: Kp: %.3f, Ki: %.4f\r\n", Kp[1], Ki[1]);
+	printf("D Ctrl: Kp: %.3f, Ki: %.4f\r\n", Kp[0], Ki[0]);
+	printf("Q Ctrl: Kp: %.3f, Ki: %.4f\r\n", Kp[1], Ki[1]);
+}
+
+static void testMotorIdentElectrical(Test* pTest)
+{
+	// This test identifies the motor voltage to motor current FOPDT model
+	// and recommends current controller gains for D and Q
+
+	const TestArgMot* pArg = (const TestArgMot*)TestGetArgument(pTest);
+	uint8_t motorId = pArg->motorId;
+	pTest->expectedTestTime_s = 3.0f;
+
+	if(motorId > 4)
+		return;
+
+	printf("\r\n### Motor %hu Electrical System Identification ###\r\n", (uint16_t)motorId);
+
+	if(tigerBot.powerControl.state == POWER_CONTROL_STATE_USB_POWERED)
+	{
+		fprintf(stderr, "Test cannot be performed in USB powered mode!\r\n");
+		return;
+	}
+
+	TestModeStartup();
+
+	for(float angle = 0.0f; angle < M_PI; angle += 60.0*M_PI/180.0f)
+		motorIdentElectricalAtAngle(motorId, angle);
 
 	TestModeExit();
 }
 
-void TestMotorIdentMechanical(uint8_t motorId)
+static void testMotorIdentMechanical(Test* pTest)
 {
 	// This test identifies the motor current to motor speed first order model.
 	// It computes load inertia (J) and viscous friction (b) from the identified model.
 
-	test.expectedTestTime = 13*1000*1000;
+	const TestArgMot* pArg = (const TestArgMot*)TestGetArgument(pTest);
+	TestResultMotIdentMech* pResult = (TestResultMotIdentMech*)TestGetResult(pTest);
+	uint8_t motorId = pArg->motorId;
+	pTest->expectedTestTime_s = 13.0f;
 
 	EMAFilter current;
 	EMAFilter speed;
@@ -182,29 +189,29 @@ void TestMotorIdentMechanical(uint8_t motorId)
 	if(motorId > 4)
 		return;
 
-	MotorsSingle* pMotor = &motors.motor[motorId];
+	McuMotor* pMotor = &devMotors.mcu[motorId];
 
-	ConsolePrint("\r\n### Motor %hu Mechanical System Identification ###\r\n", (uint16_t)motorId);
+	printf("\r\n### Motor %hu Mechanical System Identification ###\r\n", (uint16_t)motorId);
 
-	if(power.usbPowered)
+	if(tigerBot.powerControl.state == POWER_CONTROL_STATE_USB_POWERED)
 	{
-		ConsolePrint("Test cannot be performed in USB powered mode!\r\n");
+		fprintf(stderr, "Test cannot be performed in USB powered mode!\r\n");
 		return;
 	}
 
 	float R;
 
 	if(motorId > 3)
-		R = botParams.dribbler.motor.R;
+		R = robot.specs.dribbler.motor.R;
 	else
-		R = botParams.driveTrain.motor.R * 1.0f/1.5f;
+		R = robot.specs.driveTrain.motor.R * 1.0f/1.5f;
 
 	const float identVoltages[2] = { 2.0f, 8.0f };
 	float identCurrent[2];
 
 	TestModeStartup();
 
-	MotorsSetVoltageDQ(motorId, 0, 0);
+	McuMotorSetVoltageDQ(pMotor, 0, 0);
 
 	chThdSleepMilliseconds(500);
 
@@ -217,24 +224,23 @@ void TestMotorIdentMechanical(uint8_t motorId)
 
 		for(; setVolt < newVolt; setVolt += 0.01f)
 		{
-			MotorsSetCurrentDVoltageQ(motorId, 0.0f, setVolt);
+			McuMotorSetCurrentDVoltageQ(pMotor, 0.0f, setVolt);
 
 			chThdSleepMilliseconds(1);
 		}
 
 		chThdSleepMilliseconds(1000);
 
-		current.value = pMotor->avgCurrentDQ1ms[1];
-		speed.value = pMotor->hallVelocity;
+		current.value = pMotor->meas.avgCurrentDQ1ms_A[1];
+		speed.value = pMotor->meas.hallVelocity_radDs;
 
 		for(uint16_t t = 0; t < 1000; t++)
 		{
-			EMAFilterUpdate(&current, pMotor->avgCurrentDQ1ms[1]);
-			EMAFilterUpdate(&speed, pMotor->hallVelocity);
+			EMAFilterUpdate(&current, pMotor->meas.avgCurrentDQ1ms_A[1]);
+			EMAFilterUpdate(&speed, pMotor->meas.hallVelocity_radDs);
 
 			chThdSleepMilliseconds(1);
 		}
-
 
 		float U = setVolt;
 		float I = current.value;
@@ -245,7 +251,7 @@ void TestMotorIdentMechanical(uint8_t motorId)
 
 		identCurrent[i] = I;
 
-		ConsolePrint("Uq: %.3fV, Iq: %.3fA, w: %.3frad/s, K: %.6f\r\n",
+		printf("Uq: %.3fV, Iq: %.3fA, w: %.3frad/s, K: %.6f\r\n",
 				setVolt, current.value, speed.value, K);
 	}
 
@@ -255,31 +261,31 @@ void TestMotorIdentMechanical(uint8_t motorId)
 	const float stepCurrent = current.value;
 	const float stepSpeed = speed.value;
 
-	ConsolePrint("I: %.3fA, w: %.3frad/s\r\n", stepCurrent, stepSpeed);
+	printf("I: %.3fA, w: %.3frad/s\r\n", stepCurrent, stepSpeed);
 
 	// quickly reduce speed by using voltage ramp down
 	for(float f = identVoltages[1]; f > identVoltages[0]; f -= 0.01f)
 	{
-		MotorsSetCurrentDVoltageQ(motorId, 0.0f, f);
+		McuMotorSetCurrentDVoltageQ(pMotor, 0.0f, f);
 		chThdSleepMilliseconds(1);
-		EMAFilterUpdate(&speed, pMotor->hallVelocity);
+		EMAFilterUpdate(&speed, pMotor->meas.hallVelocity_radDs);
 	}
 
 	// Switch back to current control mode and wait until speed is stable
-	MotorsSetCurrentDQ(motorId, 0.0f, initialCurrent);
+	McuMotorSetCurrentDQ(pMotor, 0.0f, initialCurrent);
 
 	for(uint16_t i = 0; i < 2000; i++)
 	{
 		chThdSleepMilliseconds(1);
-		EMAFilterUpdate(&speed, pMotor->hallVelocity);
+		EMAFilterUpdate(&speed, pMotor->meas.hallVelocity_radDs);
 	}
 
 	float initialSpeed = speed.value;
 
-	ConsolePrint("I: %.3fA, w: %.3frad/s\r\n", initialCurrent, initialSpeed);
+	printf("I: %.3fA, w: %.3frad/s\r\n", initialCurrent, initialSpeed);
 
 	// Perform current step
-	MotorsSetCurrentDQ(motorId, 0.0f, stepCurrent);
+	McuMotorSetCurrentDQ(pMotor, 0.0f, stepCurrent);
 
 	// Wait until speed is at 63% of step size (one time constant)
 	const float speedT2 = (0.63f*(stepSpeed-initialSpeed) + initialSpeed);
@@ -289,40 +295,37 @@ void TestMotorIdentMechanical(uint8_t motorId)
 	uint32_t tUpStartUs = SysTimeUSec();
 	while(speed.value < speedT2)
 	{
-		EMAFilterUpdate(&speed, pMotor->hallVelocity);
+		EMAFilterUpdate(&speed, pMotor->meas.hallVelocity_radDs);
 		chThdSleepMilliseconds(1);
 	}
 
 	const float plantGain = (stepSpeed-initialSpeed) / (stepCurrent-initialCurrent);
 	float plantTimeConstant = (SysTimeUSec() - tUpStartUs) * 1e-6f;
 
-	ConsolePrint("Plant: K: %.3f, T: %.7fs\r\n", plantGain, plantTimeConstant);
+	printf("Plant: K: %.3f, T: %.7fs\r\n", plantGain, plantTimeConstant);
 
 	float b = torqueConstant/plantGain;
 	float J = plantTimeConstant*b;
 
-	ConsolePrint("Kt: %.6f [Nm/A]\r\n", torqueConstant);
-	ConsolePrint(" b: %.6f [Nmm*s]\r\n", b*1e3f);
-	ConsolePrint(" J: %.6f [kg*mm^2]\r\n", J*1e6f);
+	printf("Kt: %.6f [Nm/A]\r\n", torqueConstant);
+	printf(" b: %.6f [Nmm*s]\r\n", b*1e3f);
+	printf(" J: %.6f [kg*mm^2]\r\n", J*1e6f);
 
-	MotorsSetOff(motorId);
+	McuMotorSetOff(pMotor);
 
 	TestModeExit();
 
-	TestMotorDynamicsResult res;
-	res.motorId = motorId;
-	res.cur = stepCurrent;
-	res.speed = stepSpeed;
-	res.inertia = J;
-	res.damping = b;
+	pResult->motorId = motorId;
+	pResult->cur = stepCurrent;
+	pResult->speed = stepSpeed;
+	pResult->inertia = J;
+	pResult->damping = b;
 
-	doReasoningOnMotor(&res);
-	printTestMotorDynamicsResult(&res);
-
-	TestDriveDynamicResult(&res);
+	doReasoningOnMotor(pResult);
+	printTestResultMotIdentMech(pResult);
 }
 
-static void doReasoningOnMotor(TestMotorDynamicsResult* pResult)
+static void doReasoningOnMotor(TestResultMotIdentMech* pResult)
 {
 	pResult->reasoning.cur = TEST_REASONING_RESULT_OK;
 	pResult->reasoning.damping = TEST_REASONING_RESULT_OK;
@@ -385,17 +388,73 @@ static const char* getReasoningString(uint8_t result)
 	return reasoningString[result];
 }
 
-static void printTestMotorDynamicsResult(TestMotorDynamicsResult* pResult)
+static void printTestResultMotIdentMech(TestResultMotIdentMech* pResult)
 {
-	ConsolePrint("Finished dynamics test on motor %hu", pResult->motorId);
+	printf("Finished dynamics test on motor %hu", pResult->motorId);
 
 	if(pResult->motorId < 4)
-		ConsolePrint(" (drive motor)\r\n");
+		printf(" (drive motor)\r\n");
 	else
-		ConsolePrint(" (dribbler motor)\r\n");
+		printf(" (dribbler motor)\r\n");
 
-	ConsolePrint("  damping = %.9f (%s)\r\n", pResult->damping, getReasoningString(pResult->reasoning.damping));
-	ConsolePrint("  inertia = %.9f (%s)\r\n", pResult->inertia, getReasoningString(pResult->reasoning.inertia));
-	ConsolePrint("  current = %f (%s)\r\n", pResult->cur, getReasoningString(pResult->reasoning.cur));
-	ConsolePrint("  speed = %f (%s)\r\n", pResult->speed, getReasoningString(pResult->reasoning.vel));
+	printf("  damping = %.9f (%s)\r\n", pResult->damping, getReasoningString(pResult->reasoning.damping));
+	printf("  inertia = %.9f (%s)\r\n", pResult->inertia, getReasoningString(pResult->reasoning.inertia));
+	printf("  current = %f (%s)\r\n", pResult->cur, getReasoningString(pResult->reasoning.cur));
+	printf("  speed = %f (%s)\r\n", pResult->speed, getReasoningString(pResult->reasoning.vel));
+}
+
+SHELL_CMD(mot_elec, "Run electrical motor system identification test",
+	SHELL_ARG(motorId, "Motor id (0-4)")
+);
+
+SHELL_CMD_IMPL(mot_elec)
+{
+	(void)pUser; (void)argc;
+
+	int motorId = atoi(argv[1]);
+
+	if(motorId < 0 || motorId > 4)
+	{
+		fprintf(stderr, "Invalid motor ID");
+		return;
+	}
+
+	TestArgMot arg;
+	arg.motorId = motorId;
+
+	TestSchedule(TEST_ID_MOT_IDENT_ELEC, &arg, 1);
+}
+
+SHELL_CMD(mot_mech, "Run mechanical motor system identification test",
+	SHELL_ARG(motorId, "Motor id (0-4)")
+);
+
+SHELL_CMD_IMPL(mot_mech)
+{
+	(void)pUser; (void)argc;
+
+	int motorId = atoi(argv[1]);
+
+	if(motorId < 0 || motorId > 4)
+	{
+		fprintf(stderr, "Invalid motor ID");
+		return;
+	}
+
+	TestArgMot arg;
+	arg.motorId = motorId;
+
+	TestSchedule(TEST_ID_MOT_IDENT_MECH, &arg, 1);
+}
+
+void TestMotorInit(ShellCmdHandler* pCmdHandler)
+{
+	TestRegister(TEST_ID_MOT_IDENT_ELEC, &testMotorIdentElectrical, sizeof(TestArgMot), 0);
+	TestRegister(TEST_ID_MOT_IDENT_MECH, &testMotorIdentMechanical, sizeof(TestArgMot), sizeof(TestResultMotIdentMech));
+
+	if(pCmdHandler)
+	{
+		ShellCmdAdd(pCmdHandler, mot_elec_command);
+		ShellCmdAdd(pCmdHandler, mot_mech_command);
+	}
 }

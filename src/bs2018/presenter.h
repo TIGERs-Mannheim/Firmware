@@ -1,23 +1,28 @@
-/*
- * presenter.h
- *
- *  Created on: 24.10.2017
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "ch.h"
 #include "commands.h"
-#include "wifi.h"
-#include "hub.h"
+#include "router.h"
+#include "util/ssl_vision.h"
+#include "module/radio/radio_base.h"
+#include "module/radio/radio_settings.h"
 
 typedef struct _PresenterRobotInfo
 {
-	SystemMatchFeedback* pFeedback;
-	WifiRobot* pRobot;
-	HubStorage* pHub;
+	const RouterClient* pRouterClient;
+	const SslVisionObject* pVisionObj;
+	const RadioClientRx* pRadioClient;
 } PresenterRobotInfo;
 
+typedef struct _Presenter
+{
+	PresenterRobotInfo robotInfo[RADIO_NUM_ROBOT_CLIENTS];
+
+	THD_WORKING_AREA(waTask, 2048);
+	thread_t* pTask;
+} Presenter;
+
+extern Presenter presenter;
+
 void PresenterInit();
-void PresenterTask(void* params);
+void PresenterPrintHeapStatus();

@@ -1,10 +1,3 @@
-/*
- * menu.h
- *
- *  Created on: 02.11.2017
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"

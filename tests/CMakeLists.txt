@@ -14,12 +14,13 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-include(${CMAKE_CURRENT_LIST_DIR}/../src/libs/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/../src/shared/shared.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/libs/CMakeLists.txt)
 
 enable_testing()
 list(APPEND test_libs_SOURCES
     ${util_TEST_SOURCES}
+    ${math_TEST_SOURCES}
 )
 
 add_executable(${PROJECT_NAME}
@@ -28,7 +29,7 @@ add_executable(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${util_INCLUDE_DIRS}
+    ${math_INCLUDE_DIRS}
     arm_math_mock
 )
 

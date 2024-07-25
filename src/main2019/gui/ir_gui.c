@@ -1,13 +1,4 @@
-/*
- * ir_gui.c
- *
- *  Created on: 26.01.2020
- *      Author: MariusM
- */
-
-#include "ir.h"
-#include "../ir.h"
-#include "util/boot.h"
+#include "ir_gui.h"
 #include "gui/styles.h"
 
 #include <stdio.h>
@@ -20,9 +11,7 @@ static struct _handles
 	GHandle sensors[5];
 	GHandle posX;
 	GHandle posY;
-	GHandle logButton;
 	GHandle ballVisualization;
-	uint16_t nWrites;
 } handles;
 
 static GHandle createLabel(coord_t x, coord_t y, coord_t w, coord_t h, GHandle parent, const char* pText)
@@ -31,25 +20,9 @@ static GHandle createLabel(coord_t x, coord_t y, coord_t w, coord_t h, GHandle p
 	return gwinLabelCreate(0, &deviceLabelInit);
 }
 
-static int16_t eventHandler(GEvent* pEvent)
-{
-	if(pEvent->type == GEVENT_GWIN_BUTTON)
-	{
-		GEventGWinButton* pBtn = (GEventGWinButton*)pEvent;
-
-		if(pBtn->gwin == handles.logButton)
-		{
-			handles.nWrites++;
-			IrLogData();
-		}
-	}
-	return -1;
-}
-
 GHandle IrGuiCreate()
 {
-	handles.nWrites = 0;
-	GWidgetInit wi = {{ 0, 60, 240, 260, FALSE, 0 }, "IR Array", 0, &eventHandler, 0 };
+	GWidgetInit wi = {{ 0, 60, 240, 260, FALSE, 0 }, "IR Array", 0, 0, 0 };
 	GHandle hTop = gwinContainerCreate(0, &wi, 0);
 
 	font_t curFont = gwinGetDefaultFont();
@@ -71,9 +44,6 @@ GHandle IrGuiCreate()
 
 	handles.posX = createLabel(VIS_WIDTH + 2, 165, 200, 15, hTop, "-");
 	handles.posY = createLabel(VIS_WIDTH + 2, 180, 200, 15, hTop, "-");
-
-	GWidgetInit btnLog = {{ 150, 210, 100, 50, TRUE, hTop }, "Log Data", 0, 0, 0 };
-	handles.logButton = gwinButtonCreate(0, &btnLog);
 
 	gwinSetDefaultFont(curFont);
 
@@ -110,7 +80,7 @@ static void drawBall(float x, float y, float radius, color_t color)
 	gwinFillCircle(handles.ballVisualization, x, y, radius);
 }
 
-void IrGuiUpdate(const IRData* pData, const RobotCtrlState* pState)
+void IrGuiUpdate(const IrGuiData* pData)
 {
 	float colSums[5] = {0};
 	for(uint8_t x = 0; x < 4; ++x)
@@ -124,24 +94,22 @@ void IrGuiUpdate(const IRData* pData, const RobotCtrlState* pState)
 	gwinSetColor(handles.ballVisualization, HTML2COLOR(0x050505));
 	gwinFillArea(handles.ballVisualization, 0, 0, 150, 120);
 
-	uint8_t ballDetected = pData->ballDetected;
-
 	// Update Visualization
-	if(ballDetected)
+	if(pData->irBallDetected)
 	{
 		gwinSetColor(handles.ballVisualization, DarkGray);
 		gwinDrawLine(handles.ballVisualization, VIS_WIDTH/2, 0, VIS_WIDTH/2, VIS_HEIGHT);
 
-		drawBall(pData->estimatedBallPosition[0], pData->estimatedBallPosition[1], 8.0f, Orange);
+		drawBall(pData->irEstimatedBallPosition_mm[0]*0.1f, pData->irEstimatedBallPosition_mm[1]*0.1f, 8.0f, Orange);
 	}
 	else
 	{
 		gwinSetText(handles.ballVisualization, " No Ball Detected", FALSE);
 	}
 
-	if(pState->ballIrState > 0)
+	if(pData->filteredBallPosValid)
 	{
-		drawBall(pState->ballIrPos[0]*0.1f, pState->ballIrPos[1]*0.1f, 6.0f, Red);
+		drawBall(pData->filteredBallPos_m[0]*100.0f, pData->filteredBallPos_m[1]*100.0f, 6.0f, Red);
 	}
 
 	static char textBufferColSum[5][10];
@@ -155,13 +123,8 @@ void IrGuiUpdate(const IRData* pData, const RobotCtrlState* pState)
 
 	static char posXBuffer[20];
 	static char posYBuffer[20];
-	snprintf(posXBuffer, 20, "X=%-5.03fcm", ir.irData.estimatedBallPosition[0]);
-	snprintf(posYBuffer, 20, "Y=%-5.03fcm", ir.irData.estimatedBallPosition[1]);
+	snprintf(posXBuffer, 20, "X=%-5.03fcm", pData->irEstimatedBallPosition_mm[0]*0.1f);
+	snprintf(posYBuffer, 20, "Y=%-5.03fcm", pData->irEstimatedBallPosition_mm[1]*0.1f);
 	gwinSetText(handles.posX, posXBuffer, FALSE);
 	gwinSetText(handles.posY, posYBuffer, FALSE);
-
-	static char buttonBuffer[30];
-	snprintf(buttonBuffer, 30, "Log Data! (%hu)", handles.nWrites);
-	gwinSetText(handles.logButton, buttonBuffer, FALSE);
 }
-

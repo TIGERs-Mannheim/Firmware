@@ -1,22 +1,15 @@
-/*
- * adc.c
- *
- *  Created on: 18.02.2019
- *      Author: AndreR
- */
-
 /**
  * Motor current calculations to ADC:
-Vdd : 3.3 $
-Rs : 0.025 $
-Rb : 16.2e3 $
-Rlp : 1.33e3 $
-U_signal : I*Rs*Rb/(Rb+Rlp);
-U_bias : Vdd*Rlp/(Rb+Rlp);
-U : U_signal + U_bias;
-A : (7.32+1.33)/1.33;
-U_adc = expand(A*U*2^12/3.3);
-s1 : solve(U_adc = expand(A*U*2^12/3.3), I);
+Vdd : 3.3 $
+Rs : 0.025 $
+Rb : 16.2e3 $
+Rlp : 1.33e3 $
+U_signal : I*Rs*Rb/(Rb+Rlp);
+U_bias : Vdd*Rlp/(Rb+Rlp);
+U : U_signal + U_bias;
+A : (7.32+1.33)/1.33;
+U_adc = expand(A*U*2^12/3.3);
+s1 : solve(U_adc = expand(A*U*2^12/3.3), I);
 float(expand(s1[1]));
 
 I [mA] = 5.361871705068514*ADC_VAL - 10837.03703703705
@@ -27,11 +20,11 @@ b: Q14.15 => 10837.03704833984375 (error -0.00001130279375000098) (10837 << 15 |
 m*ADC => Q15.15 + b => Q16.15
 
  * Voltage measurement:
-R1 : 243e3 $
-R2 : 24.1e3 $
+R1 : 243e3 $
+R2 : 24.1e3 $
 (R1+R2)/R2;
-ADC = U_in * R2/(R1+R2)*2^12/3.3;
-s1 : solve(ADC = U_in * R2/(R1+R2)*2^12/3.3, U_in);
+ADC = U_in * R2/(R1+R2)*2^12/3.3;
+s1 : solve(ADC = U_in * R2/(R1+R2)*2^12/3.3, U_in);
 float(s1[1])*1000;
 
 U [mV] = 8.929164775674275*ADC_VAL
@@ -41,22 +34,22 @@ m: Q4.15 => 8.929168701171875 (error -0.000003925497599976957) (8 << 15 | 30447)
 m*ADC => Q16.15
 
  * Temperature measurement:
-ad(t) := (1.43 + (t-30)*4.3e-3)*4096/3.3;
-ts1 : ad(30);
-ts2 : ad(110);
-tsd : ad(40);
+ad(t) := (1.43 + (t-30)*4.3e-3)*4096/3.3;
+ts1 : ad(30);
+ts2 : ad(110);
+tsd : ad(40);
 (110-30)/(ts2-ts1)*(tsd-ts1) + 30;
-factor : floor(1/(ts2-ts1) * (2^29-1) * 800 * 1/2^12);
+factor : floor(1/(ts2-ts1) * (2^29-1) * 800 * 1/2^12);
 floor(f*4096);
 floor(%) * 1/2^17.0 + 300;
-floor(1/2^7 * (2^29-1) * 800);
+floor(1/2^7 * (2^29-1) * 800);
 
  * ADC calculations:
-t_adc : 12.5 $
-t_smp : 1.5 $
+t_adc : 12.5 $
+t_smp : 1.5 $
 t_latency : 2.625 $
-f_adc : 12e6 $
-t_conv : (t_adc+t_smp+t_latency)/f_adc;
+f_adc : 12e6 $
+t_conv : (t_adc+t_smp+t_latency)/f_adc;
 t_single : (t_adc+t_smp)/f_adc;
 T_6s : 6*t_single;
 d_6s : 1/2*t_single;
@@ -68,11 +61,11 @@ T_4so : 4*t_single;
 d_4so : 1/6*t_single;
 T_4so/6;
 T_4s/6;
- */
+*/
 
 #include "adc.h"
 #include "main.h"
-#include "system_init.h"
+#include "hal/system_init.h"
 
 ADCData adc;
 
@@ -135,7 +128,7 @@ static inline void doControl()
 	// resulting voltage is in [mV] and Q16.15 fixed-point representation
 	uint32_t voltage_Q16_15 = volMult_Q4_15 * adc.volAdc_U12_0;
 
-	// resulting temperature is in deci-degree celsius [d°C]
+	// resulting temperature is in deci-degree celsius [dï¿½C]
 	int32_t temperature_Q15_0 = (((adc.tempAdc_S12_0 - adc.temperatureOffset) * adc.temperatureFactor) >> 17) + 300;
 
 	(*adc.controlCallback)();
@@ -204,7 +197,7 @@ void ADCInit(ADCControlCallback controlFunc, uint32_t numCurSamples, uint32_t lo
 	adc.pSampleBufEnd = &adc.sampleBuf[0][ADC_NUM_SAMPLES_PER_MS];
 	adc.pFinishedSampleBuf = adc.sampleBuf[1];
 
-	// internal temperature sensor calibration values at 30°C and 110°C
+	// internal temperature sensor calibration values at 30degC and 110degC
 	int32_t tsCal30Deg = *((volatile uint16_t*)0x1FFFF7B8);
 	int32_t tsCal110Deg = *((volatile uint16_t*)0x1FFFF7C2);
 

@@ -3,6 +3,10 @@
 #include "math.h"
 #include "stdint.h"
 
+#ifndef PI
+  #define PI               3.14159265358979f
+#endif
+
 /**
  * @brief 8-bit fractional data type in 1.7 format.
  */

@@ -1,30 +1,25 @@
-/*
- * test_kicker.c
- *
- *  Created on: 21.05.2022
- *      Author: AndreR
- */
-
 #include "test_kicker.h"
-#include "test.h"
-#include "gui/test_kicker.h"
-#include "kicker.h"
-#include "hal/led.h"
+#include "test_common.h"
+#include "test_data.h"
+#include "util/test.h"
+#include "dev/leds_front.h"
+#include "tiger_bot.h"
+#include <stdio.h>
 
-#define TEST_KICKER_TIMEOUT 10000 // in ms
+#define TEST_KICKER_TIMEOUT_MS 10000
 
 static uint8_t dischargeKicker()
 {
-	TestKickerProgress("Discharging");
-	KickerAutoDischarge();
+	printf("Discharging\r\n");
+	KickerSetChargeMode(&tigerBot.kicker, KICKER_CHG_MODE_AUTO_DISCHARGE);
 
 	uint32_t time = 0;
-	while(kicker.autoDischarge && ++time < TEST_KICKER_TIMEOUT)
+	while(tigerBot.kicker.charger.mode == KICKER_CHG_MODE_AUTO_DISCHARGE && ++time < TEST_KICKER_TIMEOUT_MS)
 		chThdSleepMilliseconds(1);
 
-	if(time == TEST_KICKER_TIMEOUT)
+	if(time == TEST_KICKER_TIMEOUT_MS)
 	{
-		TestKickerProgress("Discharging failed");
+		printf("Discharging failed\r\n");
 		TestModeExit();
 		return 0;
 	}
@@ -32,7 +27,7 @@ static uint8_t dischargeKicker()
 	return 1;
 }
 
-static void doReasoningOnKicker(TestKickerResult* pResult)
+static void doReasoningOnKicker(TestResultKicker* pResult)
 {
 	if(pResult->chargingSpeed < 15.0f)
 		pResult->reasoning.charge = TEST_REASONING_RESULT_BAD;
@@ -56,76 +51,96 @@ static void doReasoningOnKicker(TestKickerResult* pResult)
 		pResult->reasoning.chip = TEST_REASONING_RESULT_OK;
 }
 
-void TestKicker(TestKickerResult* pResult)
+static void testKicker(Test* pTest)
 {
+	TestResultKicker* pResult = (TestResultKicker*)TestGetResult(pTest);
+
+	Kicker* pKicker = &tigerBot.kicker;
+
 	TestModeStartup();
 	pResult->chargingSpeed = 0.0f;
 	pResult->straightVoltageDrop = 0.0f;
 	pResult->chipVoltageDrop = 0.0f;
 
-	LEDLeftSet(0.0f, 0.0f, 0.01f, 0.0f);
-	LEDRightSet(0.0f, 0.0f, 0.01f, 0.0f);
+	LEDRGBWSet(&devLedFrontLeft, 0.0f, 0.0f, 0.01f, 0.0f);
+	LEDRGBWSet(&devLedFrontRight, 0.0f, 0.0f, 0.01f, 0.0f);
 
 	if(!dischargeKicker())
 		return;
 
-	LEDLeftSet(0.01f, 0.0f, 0.0f, 0.0f);
-	LEDRightSet(0.01f, 0.0f, 0.0f, 0.0f);
+	LEDRGBWSet(&devLedFrontLeft, 0.01f, 0.0f, 0.0f, 0.0f);
+	LEDRGBWSet(&devLedFrontRight, 0.01f, 0.0f, 0.0f, 0.0f);
 
-	float maxVoltageBackup = kicker.config.maxVoltage;
-	kicker.config.maxVoltage = 220.0f;
-	float startVoltage = kicker.vCap;
-	TestKickerProgress("Test: Charging");
-	KickerEnableCharge(1);
+	float maxVoltageBackup = pKicker->pConfig->maxVoltage_V;
+	pKicker->pConfig->maxVoltage_V = 220.0f;
+	float startVoltage = pKicker->charger.capAvgFast.value;
+	printf("Test: Charging\r\n");
+	KickerSetChargeMode(pKicker, KICKER_CHG_MODE_AUTO_CHARGE);
 
 	uint32_t time = 0;
-	while(!KickerIsCharged() && ++time < TEST_KICKER_TIMEOUT)
+	while(!KickerIsCharged(pKicker) && ++time < TEST_KICKER_TIMEOUT_MS)
 		chThdSleepMilliseconds(1);
 
-	if(time == TEST_KICKER_TIMEOUT)
+	if(time == TEST_KICKER_TIMEOUT_MS)
 	{
 		dischargeKicker();
-		TestKickerProgress("Charging failed");
+		printf("Charging failed\r\n");
 		return;
 	}
 
-	pResult->chargingSpeed = (kicker.vCap - startVoltage) / (time * 1e-3f);
+	pResult->chargingSpeed = (pKicker->charger.capAvgFast.value - startVoltage) / (time * 1e-3f);
 
-	TestKickerProgress("Test: Straight Kick");
-	KickerFire(0.001f, KICKER_DEVICE_STRAIGHT);
+	printf("Test: Straight Kick\r\n");
+	KickerArmDuration(pKicker, 0.001f, KICKER_DEVICE_STRAIGHT, 1);
 	chThdSleepMilliseconds(100);
-	pResult->straightVoltageDrop = kicker.vCapBeforeKick - kicker.vCap;
+	pResult->straightVoltageDrop = pKicker->kick.lastCapVoltageUsed_V;
 
-	TestKickerProgress("Recharging");
-	KickerEnableCharge(1);
+	printf("Recharging\r\n");
 	time = 0;
-	while(!KickerIsCharged() && ++time < TEST_KICKER_TIMEOUT)
+	while(!KickerIsCharged(pKicker) && ++time < TEST_KICKER_TIMEOUT_MS)
 		chThdSleepMilliseconds(1);
 
-	if(time == TEST_KICKER_TIMEOUT)
+	if(time == TEST_KICKER_TIMEOUT_MS)
 	{
 		dischargeKicker();
-		TestKickerProgress("Recharging failed");
+		printf("Recharging failed\r\n");
 		return;
 	}
 
-	TestKickerProgress("Test: Chip Kick");
-	KickerFire(0.001f, KICKER_DEVICE_CHIP);
+	printf("Test: Chip Kick\r\n");
+	KickerArmDuration(pKicker, 0.001f, KICKER_DEVICE_CHIP, 1);
 	chThdSleepMilliseconds(100);
-	pResult->chipVoltageDrop = kicker.vCapBeforeKick - kicker.vCap;
+	pResult->chipVoltageDrop = pKicker->kick.lastCapVoltageUsed_V;
 
-	LEDLeftSet(0.0f, 0.0f, 0.01f, 0.0f);
-	LEDRightSet(0.0f, 0.0f, 0.01f, 0.0f);
+	LEDRGBWSet(&devLedFrontLeft, 0.0f, 0.0f, 0.01f, 0.0f);
+	LEDRGBWSet(&devLedFrontRight, 0.0f, 0.0f, 0.01f, 0.0f);
 
-	kicker.config.maxVoltage = maxVoltageBackup;
+	pKicker->pConfig->maxVoltage_V = maxVoltageBackup;
 	if(!dischargeKicker())
 		return;
 
-	TestKickerProgress("Test complete");
+	printf("Test complete\r\n");
 
 	TestModeExit();
 
 	doReasoningOnKicker(pResult);
+}
 
-	TestKickerResults(pResult);
+SHELL_CMD(kicker, "Test kicker (charge, straight kick, chip kick)");
+
+SHELL_CMD_IMPL(kicker)
+{
+	(void)pUser; (void)argc; (void)argv;
+
+	TestSchedule(TEST_ID_KICKER, 0, 1);
+}
+
+void TestKickerInit(ShellCmdHandler* pCmdHandler)
+{
+	TestRegister(TEST_ID_KICKER, &testKicker, 0, sizeof(TestResultKicker));
+
+	if(pCmdHandler)
+	{
+		ShellCmdAdd(pCmdHandler, kicker_command);
+	}
 }

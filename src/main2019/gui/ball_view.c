@@ -6,8 +6,9 @@
  */
 
 #include "ball_view.h"
-#include "robot/util.h"
-#include "../robot_pi.h"
+#include "robot/robot_math.h"
+#include "math/vector.h"
+#include "tiger_bot.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -48,7 +49,7 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hContLive, FALSE);
 			gwinSetVisible(handles.hContMap, TRUE);
 
-			robotPi.enablePreview = 0;
+			tigerBot.robotPi.enablePreview = 0;
 		}
 
 		if(pBtn->gwin == handles.hBtnLive)
@@ -56,7 +57,7 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hContMap, FALSE);
 			gwinSetVisible(handles.hContLive, TRUE);
 
-			robotPi.enablePreview = 1;
+			tigerBot.robotPi.enablePreview = 1;
 		}
 
 		if(pBtn->gwin == handles.hBtnFar)
@@ -71,14 +72,14 @@ static int16_t eventHandler(GEvent* pEvent)
 
 		if(pBtn->gwin == handles.hBtnResInc)
 		{
-			if(robotPi.cameraControl.resolution < 2)
-				robotPi.cameraControl.resolution++;
+			if(tigerBot.robotPi.cameraControl.resolution < 2)
+				tigerBot.robotPi.cameraControl.resolution++;
 		}
 
 		if(pBtn->gwin == handles.hBtnResDec)
 		{
-			if(robotPi.cameraControl.resolution > 0)
-				robotPi.cameraControl.resolution--;
+			if(tigerBot.robotPi.cameraControl.resolution > 0)
+				tigerBot.robotPi.cameraControl.resolution--;
 		}
 
 		if(pBtn->gwin == handles.hBtnRec)
@@ -86,10 +87,10 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hFileImg, FALSE);
 			gwinSetVisible(handles.hFileVid, TRUE);
 
-			if(robotPi.cameraControl.recording)
-				robotPi.cameraControl.recording = 0;
+			if(tigerBot.robotPi.cameraControl.recording)
+				tigerBot.robotPi.cameraControl.recording = 0;
 			else
-				robotPi.cameraControl.recording = 1;
+				tigerBot.robotPi.cameraControl.recording = 1;
 		}
 
 		if(pBtn->gwin == handles.hBtnTrig)
@@ -97,8 +98,8 @@ static int16_t eventHandler(GEvent* pEvent)
 			gwinSetVisible(handles.hFileVid, FALSE);
 			gwinSetVisible(handles.hFileImg, TRUE);
 
-			robotPi.cameraControl.recording = 0;
-			RobotPiTriggerImageCapture();
+			tigerBot.robotPi.cameraControl.recording = 0;
+			RobotPiTriggerImageCapture(&tigerBot.robotPi);
 		}
 	}
 
@@ -265,7 +266,7 @@ void BallViewUpdateDetections(const ExtBallDetections* pDetections)
 		float posLocal[3] = { 0, 0, posGlobal[2] };
 		posLocal[0] = posGlobal[0] - robotPos[0];
 		posLocal[1] = posGlobal[1] - robotPos[1];
-		CtrlUtilTurnGlobal2Local(robotPos[2], posLocal[0], posLocal[1], posLocal, posLocal+1);
+		Vector2fTurnGlobal2Local(robotPos[2], posLocal[0], posLocal[1], posLocal, posLocal+1);
 
 		posLocal[1] -= 0.1f; // adjust zero to be at dribbler, not at robot center
 
