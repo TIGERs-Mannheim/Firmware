@@ -4,10 +4,10 @@
 
 typedef enum NetVerdict
 {
-	NET_VERDICT_DROP,
-	NET_VERDICT_OK,
-	NET_VERDICT_CONTINUE,
-	NET_VERDICT_PASS_ON,
+	NET_VERDICT_DROP,		// packet is bad/invalid, no further processing
+	NET_VERDICT_OK,			// packet is fully consumed, processing stops
+	NET_VERDICT_CONTINUE,	// protocol does not handle this packet, network stack should try other protocols on the same layer
+	NET_VERDICT_PASS_ON,	// protocol partially handles this packet, it contains more data which should be passed on to higher layers
 } NetVerdict;
 
 typedef NetVerdict(*NetReceiveFunc)(NetPkt*, void*);

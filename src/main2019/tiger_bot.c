@@ -29,7 +29,6 @@ TigerBot tigerBot = {
 	.kickerConfig = {
 		.maxVoltage_V = 200,
 		.chgHysteresis_V = 5.0f,
-		.cooldown_ms = 80,
 		.kickVoltageLimit = 0.9f,
 		.straightCoeffs = { 1.281f, -0.085f, 0.096f },
 		.straightMinTime_ms = 1.0f,
@@ -37,6 +36,8 @@ TigerBot tigerBot = {
 		.chipMinTime_ms = 2.0f,
 		.dribbleStraightCoeffs = { 0.0f, 0.0f },
 		.dribbleChipCoeffs = { 0.0f, 0.0f },
+		.cooldown_ms = 80,
+		.irThreshold = 50,
 	},
 
 	.patternIdentConfig = {
@@ -140,7 +141,7 @@ void TigerBotInit()
 	kickerData.chargePin = (GPIOPin){ GPIOG, GPIO_PIN_11 };
 	kickerData.pConfig = &tigerBot.kickerConfig;
 	kickerData.configId = SID_CFG_KICK;
-	kickerData.configVersion = 9;
+	kickerData.configVersion = 10;
 	kickerData.pConfigName = "kick/cfg";
 
 	KickerInit(&tigerBot.kicker, &kickerData, TASK_PRIO_KICKER);
@@ -227,6 +228,7 @@ void TigerBotInit()
 #define EVENT_MASK_CLI_UART			EVENT_MASK(2)
 #define EVENT_MASK_POWER_CONTROL	EVENT_MASK(3)
 #define EVENT_MASK_MOTOR			EVENT_MASK(4)
+#define EVENT_MASK_KICKER			EVENT_MASK(5)
 
 static void tigerBotTask(void*)
 {
@@ -237,11 +239,13 @@ static void tigerBotTask(void*)
 	event_listener_t cliUartListener;
 	event_listener_t powerControlListener;
 	event_listener_t motorListener[4];
+	event_listener_t kickerListener;
 
 	chEvtRegisterMask(&tigerBot.patternIdent.eventSource, &patternIdentListener, EVENT_MASK_PATTERN_IDENT);
 	chEvtRegisterMask(&tigerBot.robotPi.eventSource, &robotPiListener, EVENT_MASK_ROBOT_PI);
 	chEvtRegisterMaskWithFlags(&usart2.eventSource, &cliUartListener, EVENT_MASK_CLI_UART, UART_DMA_EVENT_BREAK_DETECTED);
 	chEvtRegisterMaskWithFlags(&tigerBot.powerControl.eventSource, &powerControlListener, EVENT_MASK_POWER_CONTROL, POWER_CONTROL_EVENT_SHUTDOWN_REQUESTED);
+	chEvtRegisterMaskWithFlags(&tigerBot.kicker.eventSource, &kickerListener, EVENT_MASK_KICKER, KICKER_EVENT_KICK_STARTED);
 
 	for(size_t i = 0; i < 4; i++)
 		chEvtRegisterMaskWithFlags(&devMotors.mcu[i].eventSource, &motorListener[i], EVENT_MASK_MOTOR, MCU_MOTOR_EVENT_BREAK_DETECTED);
@@ -255,6 +259,14 @@ static void tigerBotTask(void*)
 	while(1)
 	{
 		eventmask_t events = chEvtWaitAnyTimeout(ALL_EVENTS, TIME_INFINITE);
+
+		if(events & EVENT_MASK_KICKER)
+		{
+			tigerBot.lastKickState.kickDevice = tigerBot.kicker.kick.device;
+			tigerBot.lastKickState.kickDuration_s = tigerBot.kicker.kick.duration_s;
+			tigerBot.lastKickState.dribblerVel_mDs = robot.state.dribblerVel;
+			tigerBot.lastKickState.dribblerForce_N = robot.state.dribblerForce;
+		}
 
 		if(events & EVENT_MASK_PATTERN_IDENT)
 		{
@@ -375,7 +387,7 @@ static void shutdownSequence()
 		ExtShutdown shutdown;
 		shutdown.key = EXT_SHUTDOWN_KEY;
 
-		PacketHeader header;
+		ExtPacketHeader header;
 		header.section = SECTION_EXT;
 		header.cmd = CMD_EXT_SHUTDOWN;
 

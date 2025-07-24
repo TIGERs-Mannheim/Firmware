@@ -103,37 +103,37 @@ void RobotPiInit(RobotPi* pPi, RobotPiData* pInit, tprio_t prio)
 	pPi->currentTrackerId = 0xFFFFFFFF;
 
 	// Receive handler setup
-	pPi->robotPiVersionHandler.cmd = (PacketHeader){{ CMD_EXT_ROBOT_PI_VERSION, SECTION_EXT }};
+	pPi->robotPiVersionHandler.cmd = (ExtPacketHeader){{ CMD_EXT_ROBOT_PI_VERSION, SECTION_EXT }};
 	pPi->robotPiVersionHandler.pStorage = &pPi->robotPiVersion;
 	pPi->robotPiVersionHandler.storageSize = sizeof(pPi->robotPiVersion);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->robotPiVersionHandler);
 
-	pPi->updateProgressHandler.cmd = (PacketHeader){{ CMD_EXT_UPDATE_PROGRESS, SECTION_EXT }};
+	pPi->updateProgressHandler.cmd = (ExtPacketHeader){{ CMD_EXT_UPDATE_PROGRESS, SECTION_EXT }};
 	pPi->updateProgressHandler.pStorage = &pPi->updateProgress;
 	pPi->updateProgressHandler.storageSize = sizeof(pPi->updateProgress);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->updateProgressHandler);
 
-	pPi->cameraCalibrationHandler.cmd = (PacketHeader){{ CMD_EXT_CAMERA_CALIBRATION, SECTION_EXT }};
+	pPi->cameraCalibrationHandler.cmd = (ExtPacketHeader){{ CMD_EXT_CAMERA_CALIBRATION, SECTION_EXT }};
 	pPi->cameraCalibrationHandler.pStorage = &pPi->cameraCalibration;
 	pPi->cameraCalibrationHandler.storageSize = sizeof(pPi->cameraCalibration);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->cameraCalibrationHandler);
 
-	pPi->cameraStatsHandler.cmd = (PacketHeader){{ CMD_EXT_CAMERA_STATS, SECTION_EXT }};
+	pPi->cameraStatsHandler.cmd = (ExtPacketHeader){{ CMD_EXT_CAMERA_STATS, SECTION_EXT }};
 	pPi->cameraStatsHandler.pStorage = &pPi->cameraStats;
 	pPi->cameraStatsHandler.storageSize = sizeof(pPi->cameraStats);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->cameraStatsHandler);
 
-	pPi->ballDetectionsHandler.cmd = (PacketHeader){{ CMD_EXT_BALL_DETECTIONS, SECTION_EXT }};
+	pPi->ballDetectionsHandler.cmd = (ExtPacketHeader){{ CMD_EXT_BALL_DETECTIONS, SECTION_EXT }};
 	pPi->ballDetectionsHandler.pStorage = &pPi->ballDetections;
 	pPi->ballDetectionsHandler.storageSize = sizeof(pPi->ballDetections);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->ballDetectionsHandler);
 
-	pPi->pointDistanceSensorHandler.cmd = (PacketHeader){{ CMD_EXT_POINT_DIST_SENSOR, SECTION_EXT }};
+	pPi->pointDistanceSensorHandler.cmd = (ExtPacketHeader){{ CMD_EXT_POINT_DIST_SENSOR, SECTION_EXT }};
 	pPi->pointDistanceSensorHandler.pStorage = &pPi->pointDistanceSensor;
 	pPi->pointDistanceSensorHandler.storageSize = sizeof(pPi->pointDistanceSensor);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->pointDistanceSensorHandler);
 
-	pPi->cameraPreviewLineHandler.cmd = (PacketHeader){{ CMD_EXT_CAMERA_PREVIEW_LINE_160, SECTION_EXT }};
+	pPi->cameraPreviewLineHandler.cmd = (ExtPacketHeader){{ CMD_EXT_CAMERA_PREVIEW_LINE_160, SECTION_EXT }};
 	pPi->cameraPreviewLineHandler.pStorage = &pPi->cameraPreviewLine;
 	pPi->cameraPreviewLineHandler.storageSize = sizeof(pPi->cameraPreviewLine);
 	MpuExtAddPacketHandler(pPi->pExt, &pPi->cameraPreviewLineHandler);
@@ -164,7 +164,7 @@ void RobotPiSetRobotState(RobotPi* pPi, const RobotCtrlState* pState)
 
 void RobotPiTriggerImageCapture(RobotPi* pPi)
 {
-	PacketHeader header;
+	ExtPacketHeader header;
 	header.section = SECTION_EXT;
 	header.cmd = CMD_EXT_CAMERA_TRIGGER_CAPTURE;
 
@@ -273,7 +273,7 @@ static void robotPiTask(void* params)
 	event_listener_t extListener;
 	chEvtRegisterMask(&pPi->pExt->eventSource, &extListener, EVENT_MASK_EXT);
 
-	PacketHeader header;
+	ExtPacketHeader header;
 	header.section = SECTION_EXT;
 
 	while(1)

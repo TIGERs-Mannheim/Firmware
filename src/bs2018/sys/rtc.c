@@ -105,8 +105,11 @@ uint32_t RTCGetUnixTimestamp()
 	return now;
 }
 
-void RTCSetUnixTimestamp(int32_t time)
+void RTCSetUnixTimestamp(uint32_t time)
 {
+	if(llabs((int64_t)time - (int64_t)RTCGetUnixTimestamp()) < 5)
+		return;
+
 	time_t t = (time_t) time;
 	struct tm* nowtm = localtime(&t);
 	nowtm->tm_year -= 100;

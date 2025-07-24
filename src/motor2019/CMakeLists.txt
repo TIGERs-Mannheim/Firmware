@@ -33,7 +33,7 @@ add_link_options(
     -mfloat-abi=soft
 )
 
-add_executable(${RUN_EXEC}
+add_executable(${RUN_EXEC} EXCLUDE_FROM_ALL
     adc.c
     dribbler.c
     dribbler_ctrl.c

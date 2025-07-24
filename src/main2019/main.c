@@ -142,8 +142,6 @@ static THD_WORKING_AREA(waLogFile, 4096);
 static THD_WORKING_AREA(waUSB, 4096);
 static THD_WORKING_AREA(waUSBHCD, 4096);
 static THD_WORKING_AREA(waSDCard, 4096);
-static THD_WORKING_AREA(waNetwork, 4096);
-static THD_WORKING_AREA(waNetworkRel, 1024);
 static THD_WORKING_AREA(waRobot, 8192);
 
 #define LOG_FILE_BUFFER_SIZE	(128*1024)
@@ -188,8 +186,6 @@ int main()
 	SCB->VTOR = 0x08100000;
 
 	SystemInit();
-	TIM2Init();
-	SysTimeInit(&tim2);
 
 	// Enable compensation cell to reduce noise on power lines with 50MHz/100MHz I/Os
 	SYSCFG->CCCSR = SYSCFG_CCCSR_EN;
@@ -198,6 +194,8 @@ int main()
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
 
 	chSysInit();
+	TIM2Init();
+	SysTimeInit(&tim2);
 
 	// --- Software-Only Components ---
 	InventoryInit();
@@ -252,7 +250,7 @@ int main()
 	// --- High-Level Systems ---
 	RobotInit();
 	TigerBotInit();
-	NetworkInit();
+	NetworkInit(TASK_PRIO_NETWORK);
 	NetworkPrintInit(&NetworkSendPacketRaw);
 	LogFileInit(logFileWriteBuf, LOG_FILE_BUFFER_SIZE);
 	TestsInit(TASK_PRIO_TESTS);
@@ -265,9 +263,7 @@ int main()
 
 	// --- Tasks ---
 	chThdCreateStatic(waPresenter, sizeof(waPresenter), NORMALPRIO-40, PresenterTask, 0);
-	chThdCreateStatic(waNetwork, sizeof(waNetwork), NORMALPRIO+50, NetworkTask, 0);
 	chThdCreateStatic(waRobot, sizeof(waRobot), NORMALPRIO+5, RobotTask, 0);
-	chThdCreateStatic(waNetworkRel, sizeof(waNetworkRel), NORMALPRIO-4, NetworkReliableTask, 0);
 	chThdCreateStatic(waConfig, sizeof(waConfig), NORMALPRIO-7, ConfigTask, 0);
 	chThdCreateStatic(waUSB, sizeof(waUSB), NORMALPRIO-8, USBTask, 0);
 	chThdCreateStatic(waUSBHCD, sizeof(waUSBHCD), NORMALPRIO-9, USBHCDTask, 0);

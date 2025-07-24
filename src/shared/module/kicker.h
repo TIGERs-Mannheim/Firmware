@@ -19,13 +19,14 @@
 #define KICKER_CHG_MODE_AUTO_CHARGE		1
 #define KICKER_CHG_MODE_AUTO_DISCHARGE	2
 
+#define KICKER_EVENT_KICK_STARTED		EVENT_MASK(0)
+
 extern const char* kickerErrorStrings[];
 
 typedef struct PACKED _KickerConfig
 {
 	float maxVoltage_V;
 	float chgHysteresis_V;
-	uint32_t cooldown_ms;
 	float kickVoltageLimit; // ignore kick cmds below kickVoltageLimit*curVoltage
 
 	float straightCoeffs[3];  // constant, linear, quadratic
@@ -36,6 +37,9 @@ typedef struct PACKED _KickerConfig
 
 	float dribbleStraightCoeffs[2]; // constant, linear
 	float dribbleChipCoeffs[2]; // constant, linear
+
+	uint16_t cooldown_ms;
+	uint8_t irThreshold; // Percentage of IR on-off difference to trigger interrupted barrier
 } KickerConfig;
 
 typedef struct _KickerData
@@ -72,6 +76,7 @@ typedef struct _Kicker
 	uint16_t errorFlags;
 
 	ShellCmdHandler cmdHandler;
+	event_source_t eventSource;
 
 	struct
 	{
@@ -132,4 +137,5 @@ int16_t	KickerDisarm(Kicker* pKicker);
 void	KickerSetChargeMode(Kicker* pKicker, uint16_t chargeMode);
 void	KickerSetMaxVoltage(Kicker* pKicker, float vMax_V);
 void	KickerSetCooldown(Kicker* pKicker, uint32_t cooldown_ms);
+void    KickerSetIrThreshold(Kicker* pKicker, uint8_t percentage);
 uint8_t	KickerIsCharged(Kicker* pKicker);

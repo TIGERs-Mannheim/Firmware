@@ -32,6 +32,7 @@ list(APPEND f0xx_INCLUDE_DIRS
 
 list(APPEND f7xx_SOURCES
     ${hal_common_SOURCES}
+	${CMAKE_CURRENT_LIST_DIR}/f7xx/hal/cpuid.c
     ${CMAKE_CURRENT_LIST_DIR}/f7xx/hal/eth.c
     ${CMAKE_CURRENT_LIST_DIR}/f7xx/hal/flash.c
     ${CMAKE_CURRENT_LIST_DIR}/f7xx/hal/uart_dma.c
@@ -45,6 +46,7 @@ list(APPEND f7xx_INCLUDE_DIRS
 list(APPEND h7xx_SOURCES
     ${hal_common_SOURCES}
     ${usb_SOURCES}
+	${CMAKE_CURRENT_LIST_DIR}/h7xx/hal/cpuid.c
     ${CMAKE_CURRENT_LIST_DIR}/h7xx/hal/flash.c
     ${CMAKE_CURRENT_LIST_DIR}/h7xx/hal/i2c_lld_hw.c
     ${CMAKE_CURRENT_LIST_DIR}/h7xx/hal/uart_dma.c

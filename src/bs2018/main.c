@@ -10,8 +10,8 @@
  * 0x08020000 - 0x08200000 (1920k) Flash via AXIM - Run Code
  *
  * 0x20000000 - 0x20020000 ( 128k) DTC RAM
- * 0x20020000 - 0x2007C000 ( 368k) RAM1
- * 0x2007C000 - 0x20080000 (  16k) RAM2
+ * 0x20020000 - 0x2007C000 ( 368k) SRAM1
+ * 0x2007C000 - 0x20080000 (  16k) SRAM2
  *
  * 0x40000000 - 0x40007FFF (  32k) APB1
  *
@@ -98,8 +98,6 @@ int main()
 	SCB->VTOR = 0x00220000;
 
 	SystemInit();
-	TIM2Init();
-	SysTimeInit(&tim2);
 
 	// Enable compensation cell to reduce noise on power lines with 50MHz/100MHz I/Os
 	SYSCFG->CMPCR = SYSCFG_CMPCR_CMP_PD;
@@ -108,6 +106,8 @@ int main()
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
 
 	chSysInit();
+	TIM2Init();
+	SysTimeInit(&tim2);
 
 	// --- Software-Only Components ---
 	FlashFSInit(0x08010000, 32*1024);

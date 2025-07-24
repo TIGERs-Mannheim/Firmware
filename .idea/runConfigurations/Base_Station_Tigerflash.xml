@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Base Station Tigerflash" type="CMakeRunConfiguration" factoryName="Application" folderName="Develop" PROGRAM_PARAMS="-a 0x08020000 -s 384 -d BSV2018 -c -q -w $CMakeCurrentBuildDir$/src/bs2018/bs2018.bin" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$ProjectFileDir$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Firmware" TARGET_NAME="basestation_v2018" CONFIG_NAME="Debug" RUN_PATH="$TIGERS_TIGERFLASH$/tigerflash">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      <option name="CMake.Explicit.Target" predefinedTargetName="copy_tigerflash" />
+    </method>
+  </configuration>
+</component>

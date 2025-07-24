@@ -1,17 +1,9 @@
-/*
- * skills.c
- *
- *  Created on: 24.06.2015
- *      Author: AndreR
- */
-
 #include "skill_basics.h"
 #include "skill_sine.h"
 #include "skills.h"
 #include "skill_fast_pos.h"
 #include "skill_circle_ball.h"
 #include "skill_kick_ball.h"
-#include "intercom_constants.h"
 #include <string.h>
 
 Skills skills;

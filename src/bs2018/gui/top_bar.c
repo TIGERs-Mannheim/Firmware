@@ -1,16 +1,9 @@
-/*
- * top_bar.c
- *
- *  Created on: 02.11.2017
- *      Author: AndreR
- */
-
 #include "top_bar.h"
 #include "gui/icons.h"
 #include <time.h>
 #include <stdio.h>
 
-static struct _handles
+static struct
 {
 	GHandle hMenuButton;
 	GHandle hTitle;
@@ -40,7 +33,7 @@ GHandle TopBarCreate()
 	handles.hMenuButton = gwinButtonCreate(0, &menuBtnInit);
 	gwinSetFont(handles.hMenuButton, deja16);
 
-	GWidgetInit titleInit = { { 80, 0, 460, 60, TRUE, hTop }, "Overview", 0, 0, 0 };
+	GWidgetInit titleInit = { { 60, 0, 460, 60, TRUE, hTop }, "Overview", 0, 0, 0 };
 	handles.hTitle = gwinLabelCreate(0, &titleInit);
 	gwinSetFont(handles.hTitle, gdispOpenFont("DejaVuSans32"));
 
@@ -52,40 +45,40 @@ GHandle TopBarCreate()
 	handles.hDate = gwinLabelCreate(0, &dateInit);
 	gwinSetFont(handles.hDate, gdispOpenFont("DejaVuSans20"));
 
-	GWidgetInit ethRxInit = { { 600, 0, 100, 20, TRUE, hTop }, "RX: 0.123MB/s", 0, 0, 0 };
+	GWidgetInit ethRxInit = { { 580, 0, 120, 20, TRUE, hTop }, "RX: 0.123MB/s", 0, 0, 0 };
 	handles.hEthRx = gwinLabelCreate(0, &ethRxInit);
 	gwinSetFont(handles.hEthRx, gdispOpenFont("fixed_7x14"));
 
-	GWidgetInit ethTxInit = { { 600, 20, 100, 20, TRUE, hTop }, "TX: 2.456MB/s", 0, 0, 0 };
+	GWidgetInit ethTxInit = { { 580, 20, 120, 20, TRUE, hTop }, "TX: 2.456MB/s", 0, 0, 0 };
 	handles.hEthTx = gwinLabelCreate(0, &ethTxInit);
 	gwinSetFont(handles.hEthTx, gdispOpenFont("fixed_7x14"));
 
-	GWidgetInit ethIpInit = { { 600, 40, 200, 20, TRUE, hTop }, "IP: 127.0.0.1", 0, 0, 0 };
+	GWidgetInit ethIpInit = { { 580, 40, 220, 20, TRUE, hTop }, "IP: 127.0.0.1", 0, 0, 0 };
 	handles.hEthIp = gwinLabelCreate(0, &ethIpInit);
 	gwinSetFont(handles.hEthIp, gdispOpenFont("fixed_7x14"));
 
-	handles.hIconNetwork = IconsCreate(545, 5, hTop, ICON_NETWORK, Gray);
+	handles.hIconNetwork = IconsCreate(525, 5, hTop, ICON_NETWORK, Gray);
 
-	GWidgetInit qualInit = { { 465, 0, 80, 20, TRUE, hTop }, "Link: 98.0%", 0, 0, 0 };
+	GWidgetInit qualInit = { { 445, 0, 80, 20, TRUE, hTop }, "Link: 98.0%", 0, 0, 0 };
 	handles.hWifiQual = gwinLabelCreate(0, &qualInit);
 	gwinSetFont(handles.hWifiQual, gdispOpenFont("fixed_7x14"));
 
-	GWidgetInit botsInit = { { 465, 20, 80, 20, TRUE, hTop }, "Bots: 4", 0, 0, 0 };
+	GWidgetInit botsInit = { { 445, 20, 80, 20, TRUE, hTop }, "Bots: 4", 0, 0, 0 };
 	handles.hNumBots = gwinLabelCreate(0, &botsInit);
 	gwinSetFont(handles.hNumBots, gdispOpenFont("fixed_7x14"));
 
-	GWidgetInit chanInit = { { 465, 40, 80, 20, TRUE, hTop }, "Chan: 150", 0, 0, 0 };
+	GWidgetInit chanInit = { { 445, 40, 80, 20, TRUE, hTop }, "Chan: 150", 0, 0, 0 };
 	handles.hChan = gwinLabelCreate(0, &chanInit);
 	gwinSetFont(handles.hChan, gdispOpenFont("fixed_7x14"));
 
-	handles.hIconWifi = IconsCreate(410, 5, hTop, ICON_WIFI_LARGE, Gray);
+	handles.hIconWifi = IconsCreate(390, 5, hTop, ICON_WIFI_LARGE, Gray);
 
-	handles.hIconVision = IconsCreate(370, 2, hTop, ICON_EYE, Gray);
+	handles.hIconVision = IconsCreate(350, 2, hTop, ICON_EYE, Gray);
 
-	handles.hIconWhistle = IconsCreate(329, 30, hTop, ICON_WHISTLE, Red);
+	handles.hIconWhistle = IconsCreate(309, 30, hTop, ICON_WHISTLE, Red);
 	gwinHide(handles.hIconWhistle); // RefBox support not implemented yet
 
-	handles.hIconLaptop = IconsCreate(370, 30, hTop, ICON_LAPTOP, Gray);
+	handles.hIconLaptop = IconsCreate(350, 30, hTop, ICON_LAPTOP, Gray);
 
 	return hTop;
 }
@@ -130,18 +123,34 @@ void TopBarSetEthStats(uint32_t rxBytes, uint32_t txBytes)
 	static char rxBuf[16];
 	static char txBuf[16];
 
-	snprintf(rxBuf, 16, "RX: %5ukB/s", rxBytes/1024);
-	snprintf(txBuf, 16, "TX: %5ukB/s", txBytes/1024);
+	snprintf(rxBuf, 16, "RX: %7ukB/s", rxBytes/1024);
+	snprintf(txBuf, 16, "TX: %7ukB/s", txBytes/1024);
 
 	gwinSetText(handles.hEthRx, rxBuf, FALSE);
 	gwinSetText(handles.hEthTx, txBuf, FALSE);
 }
 
-void TopBarSetEthIP(uint8_t* ip, uint16_t port)
+void TopBarSetEthConfig(const NetIf* pIf, uint16_t port)
 {
 	static char ipBuf[32];
-	snprintf(ipBuf, 32, "IP: %d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], port);
-	gwinSetText(handles.hEthIp, ipBuf, FALSE);
+
+	switch(pIf->state)
+	{
+		case NET_IF_STATE_DISCONNECTED:
+			gwinSetText(handles.hEthIp, "IP: Disconnected", FALSE);
+			break;
+		case NET_IF_STATE_CONFIGURING:
+			gwinSetText(handles.hEthIp, "IP: Configuring", FALSE);
+			break;
+		case NET_IF_STATE_CONNECTED:
+		{
+			snprintf(ipBuf, 32, "IP: %hu.%hu.%hu.%hu:%hu %s",
+				(uint16_t)pIf->ip.u8[0], (uint16_t)pIf->ip.u8[1], (uint16_t)pIf->ip.u8[2], (uint16_t)pIf->ip.u8[3], port,
+				(pIf->ipConfigType == NET_IF_IP_CONFIG_TYPE_DHCP ? " DHCP" : ""));
+			gwinSetText(handles.hEthIp, ipBuf, FALSE);
+		}
+		break;
+	}
 }
 
 void TopBarSetEthLinkStatus(uint8_t up, uint8_t speed100M)

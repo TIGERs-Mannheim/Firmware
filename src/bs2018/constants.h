@@ -34,6 +34,7 @@
 #define TASK_PRIO_NET_IF		(NORMALPRIO + 10)
 #define TASK_PRIO_ETH			(NORMALPRIO +  9)
 #define TASK_PRIO_SSL_VISION	(NORMALPRIO +  0)
+#define TASK_PRIO_DHCP			(NORMALPRIO -  3)
 #define TASK_PRIO_SHELL			(NORMALPRIO -  5)
 #define TASK_PRIO_CLI_SERIAL	(NORMALPRIO - 10)
 #define TASK_PRIO_TOUCH			(NORMALPRIO - 35)
@@ -43,10 +44,10 @@
 // IRQ Levels
 /////////////////////////////////////////////////
 
-#define IRQL_WIFI_HIGH_PRIO	0
+#define IRQL_WIFI_TIMEOUT	0
 #define IRQL_WIFI_SPI_DONE	1
-#define IRQL_WIFI_PIN		2
-#define IRQL_WIFI_TIMEOUT	3
+#define IRQL_WIFI_HIGH_PRIO	2
+#define IRQL_WIFI_PIN		3
 
 #define IRQL_WIFI_LOW_PRIO	5
 

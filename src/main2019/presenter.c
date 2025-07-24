@@ -2,7 +2,6 @@
 #include "dev/tft.h"
 #include "robot/network.h"
 #include "util/log_file.h"
-#include "util/network_print.h"
 #include "robot/robot.h"
 #include "util/fw_updater.h"
 #include "hal/usb/usb_hcd.h"
@@ -48,7 +47,7 @@ uint8_t guiHeapBuffer[GUI_HEAP_SIZE] __attribute__((aligned(sizeof(stkalign_t)))
 
 typedef int16_t(*EventHandlerFunc)(GEvent*);
 
-static struct _handles
+static struct
 {
 	GHandle hTopBar;
 	GHandle hMenu;
@@ -170,15 +169,15 @@ void PresenterTask(void* params)
 
 		if(pEvent == 0)
 		{
-			MainStatusConfigNetworkUpdate(&network.config);
-
 			PresenterWifiStat wifiStat;
-			wifiStat.linkDisabled = network.linkDisabled;
+			wifiStat.networkMode = network.mode;
 			wifiStat.bsOnline = robot.bsOnline;
 			wifiStat.sumatraOnline = robot.sumatraOnline;
 			wifiStat.updateFreq = 1e6f/tigerBot.radioBot.stats.baseCycleTime_us;
 			wifiStat.visionDelay = robot.sensors.vision.delay;
 			wifiStat.rssi = tigerBot.radioBot.fromBase[tigerBot.radioBot.data.clientId].avgRxRssi_mdBm * 0.001f;
+			wifiStat.botId = network.config.botId;
+			wifiStat.channel = NetworkImplGetState().channel;
 
 			const Kicker* pKicker = &tigerBot.kicker;
 			const McuDribblerMeasurement* pIr = &devDribIr.meas;
@@ -204,7 +203,6 @@ void PresenterTask(void* params)
 			MainStatusWifiUpdate(&wifiStat);
 
 			// Wifi
-			WifiUpdateConfig(&network.config);
 			WifiUpdateStatus(&wifiStat);
 
 			//Ball Detector
@@ -496,7 +494,7 @@ static bool_t mouseInit(GMouse* m, unsigned driverinstance)
 #define GMOUSE_ADS7843_FINGER_CLICK_ERROR		18
 #define GMOUSE_ADS7843_FINGER_MOVE_ERROR		14
 
-const GMouseVMT const GMOUSE_DRIVER_VMT[1] = {{
+const GMouseVMT GMOUSE_DRIVER_VMT[1] = {{
 	{
 		GDRIVER_TYPE_TOUCH,
 		GMOUSE_VFLG_TOUCH | GMOUSE_VFLG_CALIBRATE | /*GMOUSE_VFLG_CAL_TEST |*/ GMOUSE_VFLG_ONLY_DOWN | /*GMOUSE_VFLG_POORUPDOWN |*/ GMOUSE_VFLG_CAL_EXTREMES,

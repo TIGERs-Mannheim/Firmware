@@ -1,19 +1,6 @@
-/*
- * skill_basics.h
- *
- *  Created on: 24.06.2015
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "robot/skills.h"
-
-#define BASIC_KD_FLAGS_KICK_DEVICE_MASK	0x01
-#define BASIC_KD_FLAGS_DRIB_SPEED_LSB	0x02
-#define BASIC_KD_FLAGS_DRIB_FORCE_LSB	0x04
-#define BASIC_KD_FLAGS_EXTRA_MASK		0x0E
-#define BASIC_KD_FLAGS_KICK_MODE_MASK	0xF0
 
 #define GLOBAL_POS_MAX_VEL_XY	5.0f
 #define GLOBAL_POS_MAX_VEL_W	30.0f
@@ -33,9 +20,13 @@ extern SkillInstance skillLocalForce;
 
 typedef struct PACKED _BasicKDInput
 {
-	uint8_t kickSpeed;		// [0.04 m/s]
-	uint8_t flags;			// kick mode, kick dev, extra dribble bits
-	uint8_t dribbler;		// [m/s / 4] and [0.5N]
+	//  0: Kick Speed, 9 bits, [0.02m/s] or [25us], max. 10.22m/s or 12.775ms
+	//  9: Kick Device, 1 bit, one of KICKER_DEVICE_
+	// 10: Kick Mode, 2 bits, one of KICKER_MODE_
+	// 12: Dribbler Speed, 6 bits, [0.125m/s], max. 7.875m/s
+	// 18: Dribbler Force, 6 bits, [0.25N], max. 15.75N
+	// => 24 bits in total
+	uint8_t data[3];
 } BasicKDInput;
 
 typedef struct PACKED _LocalVelInput
@@ -72,6 +63,6 @@ typedef struct _EmergencyData
 
 extern SkillEmergencyData emergency;
 
-void SkillBasicsParseKDInput(const SkillInput* pInput, const BasicKDInput* pKD, SkillOutput* pOutput);
+void SkillBasicsParseKDInput(const BasicKDInput* pKD, SkillOutput* pOutput);
 void SkillBasicsSetKDInputKicker(BasicKDInput* pKD, uint8_t kickMode, uint8_t kickDevice, float kickSpeed);
-void SkillBasicsSetKDInputDribbler(BasicKDInput* pKD, float dribbleSpeed_rpm, float maxCurrent);
+void SkillBasicsSetKDInputDribbler(BasicKDInput* pKD, float dribbleSpeed_mDs, float maxForce_N);

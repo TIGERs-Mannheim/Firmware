@@ -158,6 +158,25 @@ typedef struct PACKED _RobotSensors
 		float avgYBottom;
 		uint32_t isMostlyWhite;
 	} pointDist;
+
+	struct PACKED
+	{
+		uint32_t updated;
+		uint32_t time;		// local arrival time (systime)
+		uint32_t delay;		// t [us]
+		float pos[2];		// X, Y, Z [m]
+		uint32_t camId;
+	} visionBall;
+
+	struct PACKED
+	{
+		uint32_t updated;
+		uint32_t time;
+		float fieldSize[2];	// X, Y [m]
+		float boundaryWidth; // [m]
+		float goalWidth;
+		float goalDepth;
+	} visionGeometry;
 } RobotSensors;
 
 typedef struct PACKED _RobotAuxData
@@ -174,6 +193,14 @@ typedef struct PACKED _RobotAuxData
 	struct PACKED
 	{
 		float maxLevel;
+
+		struct PACKED
+		{
+			uint32_t kickDevice;
+			float kickDuration_s;
+			float dribblerVel_mDs;
+			float dribblerForce_N;
+		} lastKick;
 	} kicker;
 
 	struct PACKED
@@ -284,8 +311,8 @@ typedef struct PACKED _RobotPerformance
 
 typedef struct PACKED _DriveInput
 {
-	float pos[3];			// [m]
-	float localVel[3];		// [m/s]
+	float pos[3];			// [m] and [rad]
+	float localVel[3];		// [m/s] and [rad/s]
 	float wheelVel[4];		// [rad/s] @ wheel
 	float localForce[3];	// [N] (XY) and [Nm] (W)
 	uint32_t modeXY;
@@ -307,7 +334,7 @@ typedef struct PACKED _KickerInput
 {
 	uint32_t mode;
 	uint32_t device;
-	float speed;		// [m/s]
+	float speed;		// [m/s] or [s], depending on mode
 } KickerInput;
 
 typedef struct PACKED _SkillOutput

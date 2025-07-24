@@ -5,6 +5,7 @@
 #include "src/gwin/gwin_keyboard_layout.h"
 #include "setup.h"
 #include "version.h"
+#include "router.h"
 
 static const GVSpecialKey numpadSKeys[] = {
 		{ "\010", "\b", 0, 0 },							// \001 (1)	= Backspace
@@ -15,13 +16,17 @@ static const char *numpadSet[] = { "789", "456", "123", "0.\001", 0 };
 static const GVKeySet numpadKeySet[] = { numpadSet, 0 };
 const GVKeyTable VirtualKeyboard_Numpad = { numpadSKeys, numpadKeySet };
 
-static struct _handles {
+static struct
+{
 	GHandle hChannelEdit;
 	GHandle hMaxBotsEdit;
 	GHandle hRuntime;
 
 	GHandle hEthIp;
 	GHandle hEthPort;
+	GHandle hEthDhcp;
+	GHandle hEthDhcpIp;
+	GHandle hEthHostname;
 
 	GHandle hVisionIp;
 	GHandle hVisionPort;
@@ -30,6 +35,8 @@ static struct _handles {
 
 	GHandle hBtnEditSave;
 	GHandle hBtnRecalib;
+	GHandle hBtnAllocAll;
+	GHandle hBtnReleaseAll;
 
 	uint8_t editModeOn;
 } handles;
@@ -50,6 +57,7 @@ static int16_t eventHandler(GEvent* pEvent)
 				gwinSetText(handles.hBtnEditSave, "Save", FALSE);
 				gwinSetVisible(handles.hKeyboard, TRUE);
 				gwinEnable(handles.hRuntime);
+				gwinEnable(handles.hEthDhcp);
 				handles.editModeOn = 1;
 			}
 			else
@@ -64,6 +72,8 @@ static int16_t eventHandler(GEvent* pEvent)
 					data.wifi.maxBots = u16;
 
 				data.wifi.fixedRuntime = (uint8_t)gwinCheckboxIsChecked(handles.hRuntime);
+
+				data.eth.useDhcp = (uint8_t)gwinCheckboxIsChecked(handles.hEthDhcp);
 
 				if(sscanf(gwinGetText(handles.hEthIp), "%hu.%hu.%hu.%hu", &ip[0], &ip[1], &ip[2], &ip[3]) == 4)
 				{
@@ -89,6 +99,7 @@ static int16_t eventHandler(GEvent* pEvent)
 				gwinSetText(handles.hBtnEditSave, "Edit", FALSE);
 				gwinSetVisible(handles.hKeyboard, FALSE);
 				gwinDisable(handles.hRuntime);
+				gwinDisable(handles.hEthDhcp);
 				handles.editModeOn = 0;
 			}
 		}
@@ -96,6 +107,14 @@ static int16_t eventHandler(GEvent* pEvent)
 		{
 			FlashFSDelete("touch/calib");
 			NVIC_SystemReset();
+		}
+		else if(pBtn->gwin ==  handles.hBtnAllocAll)
+		{
+			router.broadcast.sumatraData.allocatedBotIds = 0xFFFFFFFF;
+		}
+		else if(pBtn->gwin ==  handles.hBtnReleaseAll)
+		{
+			router.broadcast.sumatraData.allocatedBotIds = 0;
 		}
 	}
 
@@ -140,7 +159,7 @@ GHandle SetupCreate()
 	gwinDisable(handles.hRuntime);
 
 
-	GWidgetInit ethConfig = {{ 5, 170, 225, 155, TRUE, hTop}, 0, 0, 0, 0};
+	GWidgetInit ethConfig = {{ 5, 170, 225, 190, TRUE, hTop}, 0, 0, 0, 0};
 	GHandle hEthConfig = gwinContainerCreate(0, &ethConfig, GWIN_CONTAINER_BORDER);
 
 	GWidgetInit ethTitlelLabelInit = {{5, 5, 200, 20, TRUE, hEthConfig}, "Network Configuration", 0, 0, 0};
@@ -149,14 +168,27 @@ GHandle SetupCreate()
 	GWidgetInit ethIpLabelInit = {{5, 35, 40, 30, TRUE, hEthConfig}, "IP:", 0, 0, 0};
 	gwinLabelCreate(0, &ethIpLabelInit);
 
-	GWidgetInit ethIpInit = {{55, 35, 160, 30, TRUE, hEthConfig}, "192.168.100.210", 0, 0, 0};
+	GWidgetInit ethIpInit = {{65, 35, 150, 30, TRUE, hEthConfig}, "192.168.100.210", 0, 0, 0};
 	handles.hEthIp = gwinTexteditCreate(0, &ethIpInit, 15);
+
+	GWidgetInit ethDhcpIpInit = {{65, 35, 150, 30, FALSE, hEthConfig}, "0.0.0.0", 0, 0, 0};
+	handles.hEthDhcpIp = gwinLabelCreate(0, &ethDhcpIpInit);
 
 	GWidgetInit ethPortLabelInit = {{5, 75, 40, 30, TRUE, hEthConfig}, "Port:", 0, 0, 0};
 	gwinLabelCreate(0, &ethPortLabelInit);
 
-	GWidgetInit ethPortInit = {{55, 75, 160, 30, TRUE, hEthConfig}, "10201", 0, 0, 0};
+	GWidgetInit ethPortInit = {{65, 75, 150, 30, TRUE, hEthConfig}, "10201", 0, 0, 0};
 	handles.hEthPort = gwinTexteditCreate(0, &ethPortInit, 5);
+
+	GWidgetInit dhcpInit = {{65, 115, 150, 30, TRUE, hEthConfig}, "Use DHCP", 0, 0, 0};
+	handles.hEthDhcp = gwinCheckboxCreate(0, &dhcpInit);
+	gwinDisable(handles.hEthDhcp);
+
+	GWidgetInit hostnameLabelInit = {{5, 150, 50, 30, TRUE, hEthConfig}, "Name:", 0, 0, 0};
+	gwinLabelCreate(0, &hostnameLabelInit);
+
+	GWidgetInit hostnameInit = {{65, 150, 160, 30, TRUE, hEthConfig}, "hostname", 0, 0, 0};
+	handles.hEthHostname = gwinLabelCreate(0, &hostnameInit);
 
 
 	GWidgetInit visionConfig = {{ 240, 5, 225, 155, TRUE, hTop}, 0, 0, 0, 0};
@@ -177,8 +209,20 @@ GHandle SetupCreate()
 	GWidgetInit visionPortInit = {{55, 75, 160, 30, TRUE, hVisionConfig}, "10002", 0, 0, 0};
 	handles.hVisionPort = gwinTexteditCreate(0, &visionPortInit, 5);
 
+	GWidgetInit allocConfig = {{ 240, 170, 225, 155, TRUE, hTop}, 0, 0, 0, 0};
+	GHandle hAllocConfig = gwinContainerCreate(0, &allocConfig, GWIN_CONTAINER_BORDER);
 
-	GWidgetInit versionLabelInit = {{10, 360, 300, 20, TRUE, hTop}, VersionGetString(), 0, 0, 0};
+	GWidgetInit allocTitlelLabelInit = {{5, 5, 200, 20, TRUE, hAllocConfig}, "Robot Allocation", 0, 0, 0};
+	gwinLabelCreate(0, &allocTitlelLabelInit);
+
+	GWidgetInit btnAllocAllInit = {{5, 35, 215, 50, TRUE, hAllocConfig}, "Allocate All Bots", 0, 0, 0};
+	handles.hBtnAllocAll = gwinButtonCreate(0, &btnAllocAllInit);
+
+	GWidgetInit btnReleaseAllInit = {{5, 90, 215, 50, TRUE, hAllocConfig}, "Release All Bots", 0, 0, 0};
+	handles.hBtnReleaseAll = gwinButtonCreate(0, &btnReleaseAllInit);
+
+
+	GWidgetInit versionLabelInit = {{10, 380, 300, 20, TRUE, hTop}, VersionGetString(), 0, 0, 0};
 	gwinLabelCreate(0, &versionLabelInit);
 
 
@@ -195,8 +239,19 @@ GHandle SetupCreate()
 	return hTop;
 }
 
-void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig)
+void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig, NetIf* pIf)
 {
+	if(gwinCheckboxIsChecked(handles.hEthDhcp))
+	{
+		gwinHide(handles.hEthIp);
+		gwinShow(handles.hEthDhcpIp);
+	}
+	else
+	{
+		gwinHide(handles.hEthDhcpIp);
+		gwinShow(handles.hEthIp);
+	}
+
 	if(handles.editModeOn)
 		return;
 
@@ -205,6 +260,7 @@ void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig)
 	data.wifi.fixedRuntime = pRadioConfig->fixedRuntime;
 	data.eth.ip = pBaseConfig->base.ip;
 	data.eth.port = pBaseConfig->base.port;
+	data.eth.useDhcp = pBaseConfig->base.isDHCPEnabled;
 	data.vision.ip = pBaseConfig->vision.ip;
 	data.vision.port = pBaseConfig->vision.port;
 
@@ -218,14 +274,21 @@ void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig)
 
 	gwinCheckboxCheck(handles.hRuntime, data.wifi.fixedRuntime ? TRUE : FALSE);
 
+	static char ethDhcpIpBuf[16];
+	const char* pIpString = IPv4FormatAddress(pIf->ip);
+	strncpy(ethDhcpIpBuf, pIpString, 16);
+	gwinSetText(handles.hEthDhcpIp, ethDhcpIpBuf, FALSE);
+
 	static char ethIpBuf[16];
-	snprintf(ethIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)data.eth.ip.u8[0], (uint16_t)data.eth.ip.u8[1],
-			(uint16_t)data.eth.ip.u8[2], (uint16_t)data.eth.ip.u8[3]);
+	pIpString = IPv4FormatAddress(data.eth.ip);
+	strncpy(ethIpBuf, pIpString, sizeof(ethIpBuf));
 	gwinSetText(handles.hEthIp, ethIpBuf, FALSE);
 
 	static char ethPortBuf[6];
 	snprintf(ethPortBuf, 6, "%hu", data.eth.port);
 	gwinSetText(handles.hEthPort, ethPortBuf, FALSE);
+
+	gwinCheckboxCheck(handles.hEthDhcp, data.eth.useDhcp ? TRUE : FALSE);
 
 	static char visionIpBuf[16];
 	snprintf(visionIpBuf, 16, "%hu.%hu.%hu.%hu", (uint16_t)data.vision.ip.u8[0], (uint16_t)data.vision.ip.u8[1],
@@ -235,4 +298,6 @@ void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig)
 	static char visionPortBuf[6];
 	snprintf(visionPortBuf, 6, "%hu", data.vision.port);
 	gwinSetText(handles.hVisionPort, visionPortBuf, FALSE);
+
+	gwinSetText(handles.hEthHostname, pIf->pHostname, FALSE);
 }

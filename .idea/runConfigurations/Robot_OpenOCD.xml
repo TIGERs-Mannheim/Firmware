@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Robot OpenOCD" type="CMakeRunConfiguration" factoryName="Application" folderName="Develop" PROGRAM_PARAMS="-c &quot;set folder build/$CMakeCurrentBuildTypeName$&quot; -f openocd/flash-mb2019.cfg" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$ProjectFileDir$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Firmware" TARGET_NAME="robot_v2020" CONFIG_NAME="Debug" RUN_PATH="$TIGERS_OPENOCD$/bin/openocd">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      <option name="CMake.Explicit.Target" predefinedTargetName="copy_openocd" />
+    </method>
+  </configuration>
+</component>

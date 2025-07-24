@@ -9,7 +9,7 @@
 
 typedef struct _PresenterRobotInfo
 {
-	const RouterClient* pRouterClient;
+	const RouterClientBot* pRouterClient;
 	const SslVisionObject* pVisionObj;
 	const RadioClientRx* pRadioClient;
 } PresenterRobotInfo;
@@ -18,7 +18,7 @@ typedef struct _Presenter
 {
 	PresenterRobotInfo robotInfo[RADIO_NUM_ROBOT_CLIENTS];
 
-	THD_WORKING_AREA(waTask, 2048);
+	THD_WORKING_AREA(waTask, 4096);
 	thread_t* pTask;
 } Presenter;
 

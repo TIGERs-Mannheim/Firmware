@@ -19,7 +19,7 @@ void RTCSetTimeBCD(uint32_t time);
 void RTCSetDateBCD(uint32_t date);
 
 uint32_t RTCGetUnixTimestamp();
-void RTCSetUnixTimestamp(int32_t time);
+void RTCSetUnixTimestamp(uint32_t time);
 
 // Adjust RTC clock by -487.1 - 488.5ppm
 void RTCSetCalib(float ppm);

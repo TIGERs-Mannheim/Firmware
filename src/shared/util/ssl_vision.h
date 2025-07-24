@@ -50,11 +50,15 @@ typedef struct _SslVisionCamera
 
 typedef struct _SslVisonGeometry
 {
+	uint8_t isValid;
+
 	float fieldLength_m; // Extent along the X axis
 	float fieldWidth_m; // Extent along the Y axis
 	float goalWidth_m;
 	float goalDepth_m;
 	float boundaryWidth_m; // Extra space beyond field lines
+
+	mutex_t accessMtx;
 } SslVisionGeometry;
 
 typedef struct _SslVisionData

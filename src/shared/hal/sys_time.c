@@ -3,29 +3,51 @@
 
 SysTimeGlobal sysTime;
 
+static void millisecondTimerIrq(virtual_timer_t*, void*)
+{
+	chSysLockFromISR();
+	++sysTime.millisecondCounter;
+	chSysUnlockFromISR();
+}
+
 void SysTimeInit(TimerSimpleLLD* pTimer1us)
 {
+	chVTObjectInit(&sysTime.millisecondTimer);
+
 	sysTime.pTimer1us = pTimer1us;
 	sysTime.cpuClock_MHz = systemClockInfo.SYSClk / 1000000UL;
 
 	TimerSimpleStartPeriodic(pTimer1us, 0xFFFFFFFF);
+	chVTSetContinuous(&sysTime.millisecondTimer, TIME_MS2I(1), millisecondTimerIrq, 0);
 }
 
-// microsecond precision, integer arithmetic => fast + recommended
-unsigned long SysTimeUSec()
+uint32_t SysTimeUSec()
 {
 	return sysTime.pTimer1us->pTim->CNT; // [us]
 }
 
-uint32_t SysTimeUnix()
+uint64_t SysTimeMonotonic_ms()
 {
-	return TIME_I2S(chVTGetSystemTimeX()) + sysTime.unixOffset;
+	chSysLock();
+	uint64_t millis = sysTime.millisecondCounter;
+	chSysUnlock();
+
+	return millis;
 }
 
-// converts SysTimeUSec to seconds (float)
-float SysTime()
+uint32_t SysTimeMonotonic_s()
 {
-	return SysTimeUSec()*1e-6f;
+	return SysTimeMonotonic_ms()/1000;
+}
+
+uint32_t SysTimeUnix_s()
+{
+	return SysTimeMonotonic_s() + sysTime.unixOffset;
+}
+
+void SysTimeSetUnixTime(uint32_t unixTime)
+{
+	sysTime.unixOffset = unixTime - SysTimeMonotonic_s();
 }
 
 uint32_t SysTimeCycleCounter()

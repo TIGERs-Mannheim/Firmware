@@ -168,6 +168,8 @@ static void testMotorIdentElectrical(Test* pTest)
 	for(float angle = 0.0f; angle < M_PI; angle += 60.0*M_PI/180.0f)
 		motorIdentElectricalAtAngle(motorId, angle);
 
+	printf("\nTest done\r\n");
+
 	TestModeExit();
 }
 

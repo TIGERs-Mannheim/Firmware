@@ -26,8 +26,13 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<folderInfo id="cmake4eclipse.mbs.config.debug.894770824.282473781" name="/" resourcePath="src/motor2019">
+						<toolChain id="cmake4eclipse.mbs.config.debug.toolChain.1575995714" name="CMake driven" superClass="cmake4eclipse.mbs.config.debug.toolChain" unusedChildren="">
+							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.1428697392" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy.2013386131"/>
+						</toolChain>
+					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/libs/f7xx/|src/motor2019/|src/ir2019/|src/bs2018/|src/main2016/|src/libs/f0xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+						<entry excluding="src/libs/f7xx/|src/bs2018/|src/main2016/|src/libs/f0xx/" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -65,6 +70,11 @@
 								<inputType id="cmake4eclipse.mbs.inputType.c.853779035" superClass="cmake4eclipse.mbs.inputType.c"/>
 								<inputType id="cmake4eclipse.mbs.inputType.cpp.2028718704" superClass="cmake4eclipse.mbs.inputType.cpp"/>
 							</tool>
+						</toolChain>
+					</folderInfo>
+					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.1352926024" name="/" resourcePath="src/ir2019">
+						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.1116076469" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain" unusedChildren="">
+							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.862975138" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy.329249453"/>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -105,8 +115,13 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.744666897" name="/" resourcePath="src/motor2019">
+						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.252932685" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain" unusedChildren="">
+							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.1269175108" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy.294432008"/>
+						</toolChain>
+					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/libs/f7xx/|src/motor2019/|src/ir2019/|src/bs2018/|src/main2016/|src/libs/f0xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+						<entry excluding="src/libs/f7xx/|src/bs2018/|src/main2016/|src/libs/f0xx/" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -117,88 +132,6 @@
 					<def name="BUILD_MOTOR2019" type="BOOL" val="1"/>
 					<def name="BUILD_IR2019" type="BOOL" val="1"/>
 					<def name="BUILD_BS2018" type="BOOL" val="0"/>
-				</defs>
-			</storageModule>
-			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
-		</cconfiguration>
-		<cconfiguration id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986" moduleId="org.eclipse.cdt.core.settings" name="motor2019_Release">
-				<externalSettings/>
-				<extensions>
-					<extension id="org.eclipse.cdt.core.PE64" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-				</extensions>
-			</storageModule>
-			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildArtefactType="cmake4eclipse.mbs.buildArtefactType.cmake" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=cmake4eclipse.mbs.buildArtefactType.cmake,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" description="" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986" name="motor2019_Release" optionalBuildProperties="" parent="cmake4eclipse.mbs.config.release">
-					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986." name="/" resourcePath="">
-						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.1769930630" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain">
-							<targetPlatform id="cmake4eclipse.mbs.targetPlatform.cmake.1806402925" name="Any Platform" superClass="cmake4eclipse.mbs.targetPlatform.cmake"/>
-							<builder buildPath="/Firmware/_build/Release" id="cmake4eclipse.mbs.builder.178191943" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CMake Builder" superClass="cmake4eclipse.mbs.builder"/>
-							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.998121926" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy">
-								<inputType id="cmake4eclipse.mbs.inputType.c.1909231895" superClass="cmake4eclipse.mbs.inputType.c"/>
-								<inputType id="cmake4eclipse.mbs.inputType.cpp.564901343" superClass="cmake4eclipse.mbs.inputType.cpp"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
-					<sourceEntries>
-						<entry excluding="src/libs/f7xx/|src/ir2019/|src/bs2018/|src/main2016/|src/main2019/|src/libs/h7xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
-					</sourceEntries>
-				</configuration>
-			</storageModule>
-			<storageModule buildDir="build/${ConfigName}" dirtyTs="1706464049439" moduleId="de.marw.cmake4eclipse.mbs.settings">
-				<options/>
-				<defs>
-					<def name="CMAKE_PREFIX_PATH" type="STRING" val="${TIGERS_ARM_TOOLCHAIN};${TIGERS_OPENOCD}"/>
-					<def name="BUILD_IR2019" type="BOOL" val="0"/>
-					<def name="BUILD_BS2018" type="BOOL" val="0"/>
-					<def name="BUILD_MAIN2019" type="BOOL" val="0"/>
-				</defs>
-			</storageModule>
-			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
-		</cconfiguration>
-		<cconfiguration id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.368660589">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.368660589" moduleId="org.eclipse.cdt.core.settings" name="ir2019_Release">
-				<externalSettings/>
-				<extensions>
-					<extension id="org.eclipse.cdt.core.PE64" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-				</extensions>
-			</storageModule>
-			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildArtefactType="cmake4eclipse.mbs.buildArtefactType.cmake" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=cmake4eclipse.mbs.buildArtefactType.cmake,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" description="" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.368660589" name="ir2019_Release" optionalBuildProperties="" parent="cmake4eclipse.mbs.config.release">
-					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.368660589." name="/" resourcePath="">
-						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.1072752727" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain">
-							<targetPlatform id="cmake4eclipse.mbs.targetPlatform.cmake.855184813" name="Any Platform" superClass="cmake4eclipse.mbs.targetPlatform.cmake"/>
-							<builder buildPath="/Firmware/_build/Release" id="cmake4eclipse.mbs.builder.1862114173" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CMake Builder" superClass="cmake4eclipse.mbs.builder"/>
-							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.150953536" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy">
-								<inputType id="cmake4eclipse.mbs.inputType.c.1482482427" superClass="cmake4eclipse.mbs.inputType.c"/>
-								<inputType id="cmake4eclipse.mbs.inputType.cpp.1233589031" superClass="cmake4eclipse.mbs.inputType.cpp"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
-					<sourceEntries>
-						<entry excluding="src/libs/f7xx/|src/motor2019/|src/bs2018/|src/main2016/|src/main2019/|src/libs/h7xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
-					</sourceEntries>
-				</configuration>
-			</storageModule>
-			<storageModule buildDir="build/${ConfigName}" dirtyTs="1706464022264" moduleId="de.marw.cmake4eclipse.mbs.settings">
-				<options/>
-				<defs>
-					<def name="CMAKE_PREFIX_PATH" type="STRING" val="${TIGERS_ARM_TOOLCHAIN};${TIGERS_OPENOCD}"/>
-					<def name="BUILD_MOTOR2019" type="BOOL" val="0"/>
-					<def name="BUILD_BS2018" type="BOOL" val="0"/>
-					<def name="BUILD_MAIN2019" type="BOOL" val="0"/>
 				</defs>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
@@ -226,6 +159,11 @@
 								<inputType id="cmake4eclipse.mbs.inputType.c.1880216021" superClass="cmake4eclipse.mbs.inputType.c"/>
 								<inputType id="cmake4eclipse.mbs.inputType.cpp.1103132271" superClass="cmake4eclipse.mbs.inputType.cpp"/>
 							</tool>
+						</toolChain>
+					</folderInfo>
+					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.1542067747.632661747" name="/" resourcePath="src/ir2019">
+						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.2112840458" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain" unusedChildren="">
+							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.2094541885" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy.793865116"/>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -269,6 +207,11 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<folderInfo id="cmake4eclipse.mbs.config.debug.894770824.1798331541.883589722" name="/" resourcePath="src/ir2019">
+						<toolChain id="cmake4eclipse.mbs.config.debug.toolChain.1749057917" name="CMake driven" superClass="cmake4eclipse.mbs.config.debug.toolChain" unusedChildren="">
+							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.900708087" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy.572381031"/>
+						</toolChain>
+					</folderInfo>
 					<sourceEntries>
 						<entry excluding="src/motor2019/|src/ir2019/|src/main2016/|src/main2019/|src/libs/f0xx/|src/libs/h7xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
 					</sourceEntries>
@@ -285,90 +228,6 @@
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
 		</cconfiguration>
-		<cconfiguration id="cmake4eclipse.mbs.config.release.748206141.792850296.798443189">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cmake4eclipse.mbs.config.release.748206141.792850296.798443189" moduleId="org.eclipse.cdt.core.settings" name="main2019_Release_Flash">
-				<externalSettings/>
-				<extensions>
-					<extension id="org.eclipse.cdt.core.PE64" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-				</extensions>
-			</storageModule>
-			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildArtefactType="cmake4eclipse.mbs.buildArtefactType.cmake" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=cmake4eclipse.mbs.buildArtefactType.cmake,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" description="" id="cmake4eclipse.mbs.config.release.748206141.792850296.798443189" name="main2019_Release_Flash" optionalBuildProperties="org.eclipse.cdt.docker.launcher.containerbuild.property.selectedvolumes=,org.eclipse.cdt.docker.launcher.containerbuild.property.volumes=" parent="cmake4eclipse.mbs.config.release">
-					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.798443189." name="/" resourcePath="">
-						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.910375871" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain">
-							<targetPlatform id="cmake4eclipse.mbs.targetPlatform.cmake.532650167" name="Any Platform" superClass="cmake4eclipse.mbs.targetPlatform.cmake"/>
-							<builder buildPath="/Firmware/_build/Release" id="cmake4eclipse.mbs.builder.1421010642" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CMake Builder" superClass="cmake4eclipse.mbs.builder"/>
-							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.832899481" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy">
-								<inputType id="cmake4eclipse.mbs.inputType.c.1646323401" superClass="cmake4eclipse.mbs.inputType.c"/>
-								<inputType id="cmake4eclipse.mbs.inputType.cpp.781289087" superClass="cmake4eclipse.mbs.inputType.cpp"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
-					<sourceEntries>
-						<entry excluding="src/libs/f7xx/|src/motor2019/|src/ir2019/|src/bs2018/|src/main2016/|src/libs/f0xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
-					</sourceEntries>
-				</configuration>
-			</storageModule>
-			<storageModule buildDir="build/${ConfigName}" dirtyTs="1715358640410" moduleId="de.marw.cmake4eclipse.mbs.settings">
-				<options/>
-				<defs>
-					<def name="CMAKE_PREFIX_PATH" type="STRING" val="${TIGERS_ARM_TOOLCHAIN};${TIGERS_OPENOCD};${TIGERS_TIGERFLASH}"/>
-					<def name="BUILD_MOTOR2019" type="BOOL" val="1"/>
-					<def name="BUILD_IR2019" type="BOOL" val="1"/>
-					<def name="BUILD_BS2018" type="BOOL" val="0"/>
-					<def name="AUTO_FLASH" type="BOOL" val="1"/>
-				</defs>
-			</storageModule>
-			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
-		</cconfiguration>
-		<cconfiguration id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.1542067747.901545664">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.1542067747.901545664" moduleId="org.eclipse.cdt.core.settings" name="bs2018_Release_Flash">
-				<externalSettings/>
-				<extensions>
-					<extension id="org.eclipse.cdt.core.PE64" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GNU_ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-				</extensions>
-			</storageModule>
-			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildArtefactType="cmake4eclipse.mbs.buildArtefactType.cmake" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=cmake4eclipse.mbs.buildArtefactType.cmake,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" description="" id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.1542067747.901545664" name="bs2018_Release_Flash" optionalBuildProperties="" parent="cmake4eclipse.mbs.config.release">
-					<folderInfo id="cmake4eclipse.mbs.config.release.748206141.792850296.908064986.1542067747.901545664." name="/" resourcePath="">
-						<toolChain id="cmake4eclipse.mbs.config.release.toolChain.1845794807" name="CMake driven" superClass="cmake4eclipse.mbs.config.release.toolChain">
-							<targetPlatform id="cmake4eclipse.mbs.targetPlatform.cmake.57619315" name="Any Platform" superClass="cmake4eclipse.mbs.targetPlatform.cmake"/>
-							<builder buildPath="/Firmware/_build/Release" id="cmake4eclipse.mbs.builder.865896003" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CMake Builder" superClass="cmake4eclipse.mbs.builder"/>
-							<tool id="cmake4eclipse.mbs.toolchain.tool.dummy.1618707086" name="CMake" superClass="cmake4eclipse.mbs.toolchain.tool.dummy">
-								<inputType id="cmake4eclipse.mbs.inputType.c.370139160" superClass="cmake4eclipse.mbs.inputType.c"/>
-								<inputType id="cmake4eclipse.mbs.inputType.cpp.61995788" superClass="cmake4eclipse.mbs.inputType.cpp"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
-					<sourceEntries>
-						<entry excluding="src/motor2019/|src/ir2019/|src/main2016/|src/main2019/|src/libs/f0xx/|src/libs/h7xx/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
-					</sourceEntries>
-				</configuration>
-			</storageModule>
-			<storageModule buildDir="build/${ConfigName}" dirtyTs="1715358747982" moduleId="de.marw.cmake4eclipse.mbs.settings">
-				<options/>
-				<defs>
-					<def name="CMAKE_PREFIX_PATH" type="STRING" val="${TIGERS_ARM_TOOLCHAIN};${TIGERS_OPENOCD};${TIGERS_TIGERFLASH}"/>
-					<def name="BUILD_MOTOR2019" type="BOOL" val="0"/>
-					<def name="BUILD_IR2019" type="BOOL" val="0"/>
-					<def name="BUILD_MAIN2019" type="BOOL" val="0"/>
-					<def name="AUTO_FLASH" type="BOOL" val="1"/>
-				</defs>
-			</storageModule>
-			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
-		</cconfiguration>
 	</storageModule>
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 		<project id="Firmware.cmake4eclipse.mbs.projectType.778415658" name="Cmake4eclipse" projectType="cmake4eclipse.mbs.projectType"/>
@@ -381,31 +240,33 @@
 		<configuration configurationName="main2016_Debug">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
+		<configuration configurationName="main2019_Release_Flash"/>
 		<configuration configurationName="motor2019_Release">
+			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
+		</configuration>
+		<configuration configurationName="bs2018_Release_Flash"/>
+		<configuration configurationName="main2019_Release">
+			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
+		</configuration>
+		<configuration configurationName="ir2019_Release">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
 		<configuration configurationName="bs2018_Release">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
-		<configuration configurationName="main2016_Release">
-			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
-		</configuration>
 		<configuration configurationName="main2019_Debug">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
-		<configuration configurationName="All_Release">
+		<configuration configurationName="main2016_Release">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
-		<configuration configurationName="main2019_Release">
+		<configuration configurationName="All_Release">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
 		<configuration configurationName="Debug">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
 		<configuration configurationName="Release">
-			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
-		</configuration>
-		<configuration configurationName="ir2019_Release">
 			<resource resourceType="PROJECT" workspacePath="/Firmware"/>
 		</configuration>
 	</storageModule>

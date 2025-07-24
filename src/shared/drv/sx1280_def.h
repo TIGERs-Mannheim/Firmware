@@ -36,7 +36,6 @@
 #define CMD_SET_UARTSPEED				0x9D
 #define CMD_SET_RANGING_ROLE			0xA3
 
-#define CMD_CLEAR_PENDING_DIO			0xF0
 #define CMD_WAIT_DIO					0xF1
 #define CMD_TIMED_IDLE					0xF2
 #define CMD_NOP							0xFF
@@ -87,7 +86,11 @@
 #define FLRC_NO_SYNCWORD			0x00
 #define FLRC_SYNCWORD_LENGTH_4_BYTE	0x04
 
+#define GFSK_SYNC_WORD_LEN_1_B		0x00
+#define GFSK_SYNC_WORD_LEN_2_B		0x02
+#define GFSK_SYNC_WORD_LEN_3_B		0x04
 #define GFSK_SYNC_WORD_LEN_4_B		0x06
+#define GFSK_SYNC_WORD_LEN_5_B		0x08
 
 #define GFSK_BR_2_000_BW_2_4 0x04
 #define GFSK_BR_1_600_BW_2_4 0x28
@@ -141,10 +144,14 @@
 #define PACKET_LENGTH_FIXED		0x00
 #define PACKET_LENGTH_VARIABLE	0x20
 
-#define CRC_OFF		0x00
-#define CRC_1_BYTES	0x10
-#define CRC_2_BYTES	0x20
-#define CRC_3_BYTES	0x30
+#define GFSK_CRC_OFF		0x00
+#define GFSK_CRC_1_BYTES	0x10
+#define GFSK_CRC_2_BYTES	0x20
+
+#define FLRC_CRC_OFF		0x00
+#define FLRC_CRC_2_BYTES	0x10
+#define FLRC_CRC_3_BYTES	0x20
+#define FLRC_CRC_4_BYTES	0x30
 
 #define WHITENING_ENABLE	0x00
 #define WHITENING_DISABLE	0x08

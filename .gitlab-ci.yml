@@ -41,7 +41,6 @@ deploy-default:
     - tags
   artifacts:
     expire_in: 1 week
-  
 
 deploy-release:
   extends: .deploy
@@ -52,12 +51,14 @@ deploy-release:
     
 deploy_arm-none-eabi:
   stage: deploy-base
-  tags:
-  - docker-build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   script:
   # Note: You have to change the version in the docker file first!
-  - 'docker build -t registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1 docker/arm-none-eabi'
-  - 'docker push registry.gitlab.tigers-mannheim.de/main/firmware/arm-none-eabi:12.3.rel1'
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/arm-none-eabi/Dockerfile --destination $CI_REGISTRY_IMAGE/arm-none-eabi:12.3.rel1
   when: manual
 
 unittests:

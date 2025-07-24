@@ -36,6 +36,7 @@ void SslVisionInit(SslVision* pVision, SslVisionData* pInit, tprio_t prio)
 	}
 
 	chMtxObjectInit(&pVision->ball.accessMtx);
+	chMtxObjectInit(&pVision->geometry.accessMtx);
 
 	ShellCmdHandlerInit(&pVision->cmdHandler, pVision);
 	registerShellCommands(&pVision->cmdHandler);
@@ -44,14 +45,15 @@ void SslVisionInit(SslVision* pVision, SslVisionData* pInit, tprio_t prio)
 	pVision->allocator.free = &freeMem;
 	pVision->allocator.allocator_data = pVision;
 
-	UDPSocketOpen(&pVision->socket, pInit->pIf, pInit->port, pInit->ip);
+	UDPSocketOpen(&pVision->socket, pInit->pIf, pInit->port);
+	UDPSocketSetMulticastGroup(&pVision->socket, pInit->ip);
 
 	pVision->pTask = chThdCreateStatic(pVision->waTask, sizeof(pVision->waTask), prio, &sslVisionTask, pVision);
 }
 
 void SslVisionUpdateViewport(SslVision* pVision, uint32_t camId, const SslVisionCameraViewport* pNewViewport)
 {
-	if(camId > SSL_VISION_MAX_CAMS)
+	if(camId >= SSL_VISION_MAX_CAMS)
 		return;
 
 	memcpy(&pVision->cams[camId].viewport, pNewViewport, sizeof(SslVisionCameraViewport));
@@ -125,11 +127,14 @@ static void handleWrapperPacket(SslVision* pVision, NetPkt* pPkt)
 	if(pPacket->geometry != 0)
 	{
 		SSLGeometryFieldSize* field = pPacket->geometry->field;
+		chMtxLock(&pVision->geometry.accessMtx);
 		pVision->geometry.boundaryWidth_m = field->boundary_width * 0.001f;
 		pVision->geometry.fieldLength_m = field->field_length * 0.001f;
 		pVision->geometry.fieldWidth_m = field->field_width * 0.001f;
 		pVision->geometry.goalDepth_m = field->goal_depth * 0.001f;
 		pVision->geometry.goalWidth_m = field->goal_width * 0.001f;
+		pVision->geometry.isValid = 1;
+		chMtxUnlock(&pVision->geometry.accessMtx);
 
 		for(size_t i = 0; i < pPacket->geometry->n_calib; i++)
 		{

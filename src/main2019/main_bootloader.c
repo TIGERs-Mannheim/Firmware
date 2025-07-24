@@ -60,8 +60,6 @@ int main()
 	SCB->VTOR = 0x08000000;
 
 	SystemInit();
-	TIM2Init();
-	SysTimeInit(&tim2);
 
 	// Enable compensation cell to reduce noise on power lines with 50MHz/100MHz I/Os
 	SYSCFG->CCCSR = SYSCFG_CCCSR_EN;
@@ -70,6 +68,8 @@ int main()
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
 
 	chSysInit();
+	TIM2Init();
+	SysTimeInit(&tim2);
 
 	// --- SYS ---
 	USART2Init(IRQL_SHELL_SERIAL, TASK_PRIO_CLI_SERIAL);
@@ -141,7 +141,7 @@ static void updateFrontLeds()
 {
 	BootloaderOperation* pOp = &bootloader.currentOperation;
 
-	float time_s = SysTime();
+	float time_s = SysTimeUSec()*1e-6f;
 
 	float intensity = (sinf(time_s * (M_PI*5.0f)) + 1.0f) * 0.5f;
 	float invIntensity = 1.0f - intensity;

@@ -17,8 +17,11 @@ typedef struct _RadioClientRx
 {
 	RadioBuffer buf;
 
-	uint8_t expectedToggleBit;
-	uint32_t rxPacketsLost;	// identified by incorrect toggle bits
+	uint8_t expectedSeq;
+	uint32_t rxPacketsLost;	// identified by gaps in sequence number
+
+	uint8_t lastRxSeqLoss;
+	uint32_t txPacketsLost;
 
 	uint32_t lastReceivedTime_us;
 	int32_t avgRxRssi_mdBm;
@@ -30,12 +33,14 @@ typedef struct _RadioClientTx
 {
 	RadioBuffer buf;
 
-	uint8_t headerToggleBit;
+	uint8_t nextSeqNumber;
 } RadioClientTx;
 
 typedef struct _RadioBaseStats
 {
-	volatile uint32_t rxInvalidHeader;
+	volatile uint32_t rxSyncError;
+	volatile uint32_t rxCrcError;
+	volatile uint32_t rxPacketsGood;
 	volatile uint32_t rxFromOtherBase;
 	volatile uint8_t timeslotsUsed;
 	volatile uint32_t cycleDuration_us;

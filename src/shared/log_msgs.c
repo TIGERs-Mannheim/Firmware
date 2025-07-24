@@ -1,26 +1,9 @@
-/*
- * log_msgs.c
- *
- *  Created on: 29.02.2016
- *      Author: AndreR
- */
-
 #include "log_msgs.h"
 #include "struct_ids.h"
 
 const LogMessageDesc logMessageDescriptions[10] = {
 
-	{ SID_GYRO_RAW, "gyro_raw", 3, (ElementDesc[]) {
-		{ INT16, "X", "raw", "X axis" },
-		{ INT16, "Y", "raw", "Y axis" },
-		{ INT16, "Z", "raw", "Z axis" },
-	}, },
-	{ SID_ACC_RAW, "acc_raw", 3, (ElementDesc[]) {
-		{ INT16, "X", "raw", "X axis" },
-		{ INT16, "Y", "raw", "Y axis" },
-		{ INT16, "Z", "raw", "Z axis" },
-	}, },
-	{ SID_SENSORS, "sensors", 81, (ElementDesc[]) {
+	{ SID_SENSORS, "sensors", 94, (ElementDesc[]) {
 		// 0 + 5
 		{ UINT32,	"vel_t", "us",	"Motor velocity timestamp" },
 		{ FLOAT,	"vel_m1", "rad/s","Motor 1 angular velocity" },
@@ -129,6 +112,23 @@ const LogMessageDesc logMessageDescriptions[10] = {
 		{ FLOAT,	"point_dist_avg_height", "m", "Avg. column height" },
 		{ FLOAT,	"point_dist_avg_y_bottom", "m", "Avg. bottom Y position" },
 		{ UINT32,	"point_dist_mostly_white", "-", "True if most columns are white" },
+
+		// 81 + 6
+		{ UINT32,	"vis_ball_updated", "-", "Vision ball updated" },
+		{ UINT32,	"vis_ball_t", "us", "Vision ball timestamp" },
+		{ UINT32,	"vis_ball_delay", "us", "Vision ball delay" },
+		{ FLOAT,	"vis_ball_pos_x", "m", "Vision ball position X" },
+		{ FLOAT,	"vis_ball_pos_y", "m", "Vision ball position Y" },
+		{ UINT32,	"vis_ball_cam_id", "-", "Vision ball camera ID" },
+
+		// 87 + 7
+		{ UINT32,	"geom_updated", "-", "Geometry updated" },
+		{ UINT32,	"geom_t", "us", "Geometry timestamp" },
+		{ FLOAT,	"geom_field_x", "m", "Field size X" },
+		{ FLOAT,	"geom_field_y", "m", "Field size Y" },
+		{ FLOAT,	"geom_boundary", "m", "Boundary width" },
+		{ FLOAT,	"geom_goal_width", "m", "Goal width" },
+		{ FLOAT,	"geom_goal_depth", "m", "Goal depth" },
 	}, },
 	{ SID_CTRL_STATE, "ctrl_state", 23, (ElementDesc[]) {
 		{ FLOAT,	"pos_x", "m", "X Position" },

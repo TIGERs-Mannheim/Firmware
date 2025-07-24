@@ -128,12 +128,16 @@ void BuzzerPlayId(Buzzer* pBuzz, uint8_t id)
 		case BUZZ_UP100: BuzzerPlay(pBuzz, &buzzSeqUp100); break;
 		case BUZZ_DOWN100: BuzzerPlay(pBuzz, &buzzSeqDown100); break;
 		case BUZZ_TADA: BuzzerPlay(pBuzz, &buzzSeqTada); break;
+		case BUZZ_SHORT_LOW: BuzzerPlay(pBuzz, &buzzSeqShortLow); break;
+		case BUZZ_SHORT_MID: BuzzerPlay(pBuzz, &buzzSeqShortMid); break;
+		case BUZZ_SHORT_HIGH: BuzzerPlay(pBuzz, &buzzSeqShortHigh); break;
 		case BUZZ_SONG_FINAL: BuzzerPlay(pBuzz, &buzzSeqFinalShort); break;
 		case BUZZ_SONG_CANTINA: BuzzerPlay(pBuzz, &buzzSeqCant); break;
 		case BUZZ_SONG_EYE_LEAD: BuzzerPlay(pBuzz, &buzzSeqEyeLead); break;
 		case BUZZ_SONG_EYE_FOLLOW: BuzzerPlay(pBuzz, &buzzSeqEyeFollow); break;
 		case BUZZ_SONG_TETRIS: BuzzerPlay(pBuzz, &buzzSeqTetris); break;
 		case BUZZ_SONG_MACARENA: BuzzerPlay(pBuzz, &buzzSeqMacarena); break;
+		case BUZZ_SONG_IMPERIAL: BuzzerPlay(pBuzz, &buzzSeqImperial); break;
 		default: BuzzerPlay(pBuzz, 0); break;
 	}
 }

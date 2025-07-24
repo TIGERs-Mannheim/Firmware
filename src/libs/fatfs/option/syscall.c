@@ -90,7 +90,7 @@ void ff_rel_grant (
 DWORD get_fattime()
 {
 	struct tm* nowtm;
-	time_t now = SysTimeUnix();
+	time_t now = SysTimeUnix_s();
 	nowtm = localtime(&now);
 
 	DWORD fatTime = ((nowtm->tm_year-80) << 25) | ((nowtm->tm_mon+1) << 21) | (nowtm->tm_mday << 16);

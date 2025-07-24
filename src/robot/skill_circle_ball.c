@@ -45,7 +45,7 @@ static void circleBallRun(const SkillInput* pInput, SkillOutput* pOutput)
 {
 	CircleBallInput* pCircle = (CircleBallInput*)pInput->pData;
 
-	SkillBasicsParseKDInput(pInput, &pCircle->kd, pOutput);
+	SkillBasicsParseKDInput(&pCircle->kd, pOutput);
 
 	if(pCircle->accMaxXY == 0)
 		pCircle->accMaxXY = 1;

@@ -1,16 +1,8 @@
-/*
- * robot.h
- *
- *  Created on: 19.07.2016
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "log_msgs.h"
 #include "commands.h"
 #include "util/config.h"
-#include "intercom_constants.h"
 #include "math/lag_element.h"
 #include "robot_specs.h"
 #include "robot_math.h"
@@ -117,5 +109,4 @@ void RobotImplBuzzerPlay(uint16_t seqId);
 void RobotImplSetLEDs(uint8_t state);
 void RobotImplKickerAutoCharge(uint8_t enable);
 uint8_t RobotImplGetHardwareId();
-int16_t RobotImplExtSendPacket(PacketHeader* pHeader, const void* _pData, uint16_t dataLength);
 void RobotImplSetEnabledDetectors(uint32_t detectors);

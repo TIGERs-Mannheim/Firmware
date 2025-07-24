@@ -31,7 +31,7 @@ add_link_options(
     -mfloat-abi=soft
 )
 
-add_executable(${RUN_EXEC}
+add_executable(${RUN_EXEC} EXCLUDE_FROM_ALL
     main.c
     adc.c
     usart1.c

@@ -9,13 +9,13 @@
 
 /**
  * A struct which can be used to store variables across skill init/run/exit calls.
- * This is made globally available for inspection and checks in cli.c
+ * This is made globally available for inspection and checks in a shell command handler.
  */
 typedef struct _SkillKickBall
 {
-	float ballPos[2]; // [m]
-	float targetPos[2]; // [m]
-	float fieldHalfSize[2]; // [m]
+	float ballPos_m[2];
+	float targetPos_m[2];
+	float fieldHalfSize_m[2];
 } SkillKickBall;
 
 extern SkillKickBall skillKickBall;

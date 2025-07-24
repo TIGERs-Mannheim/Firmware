@@ -5,6 +5,11 @@
 #include "sx1280_def.h"
 #include "struct_ids.h"
 
+#include <math.h>
+
+#define NEW_CHANNEL_CHANNEL_MASK 0xFF
+#define NEW_CHANNEL_PENDING_BIT 0x100
+
 static void phyOpDoneClient(const RadioPhyOp* pOp, void* pUser);
 static void phyOpPrepareNextClient(RadioPhyOp* pOp, void* pUser);
 static void registerShellCommands(ShellCmdHandler* pHandler);
@@ -65,8 +70,18 @@ void RadioBotSetMode(RadioBot* pRadio, RadioMode mode)
 
 void RadioBotSetChannel(RadioBot* pRadio, uint8_t channel)
 {
-	uint32_t freq = channel;
-	pRadio->newFrequency = (freq + 2300)*1000000UL;
+	pRadio->newChannel = (uint32_t)channel | NEW_CHANNEL_PENDING_BIT;
+}
+
+void RadioBotStartScan(RadioBot* pRadio, uint8_t lastChannel)
+{
+	pRadio->lastScanChannel = lastChannel;
+	pRadio->startScan = 1;
+}
+
+uint8_t RadioBotIsScanComplete(RadioBot* pRadio)
+{
+	return pRadio->startScan == 0 && pRadio->isScanning == 0;
 }
 
 int16_t RadioBotSetBotId(RadioBot* pRadio, uint8_t botId)
@@ -124,75 +139,135 @@ static void phyOpDoneClient(const RadioPhyOp* pOp, void* pUser)
 {
 	RadioBot* pRadio = (RadioBot*)pUser;
 
-	if(pOp->type == RADIO_PHY_OP_RX && pOp->rx.isPacketReceived)
+	if(pOp->type == RADIO_PHY_OP_RX)
 	{
-		SX1280LLDParsePacketStatus(&pOp->rx.rxStatus, pRadio->data.pModule->data.packetType, &pRadio->rxPacketStatus);
-
-		RadioModuleAirPacket* pPacket = (RadioModuleAirPacket*)pOp->rx.data;
-		if(pPacket->header == (pPacket->invHeader ^ 0xFF))
+		if(pRadio->startScan)
 		{
-			uint8_t clientId = pPacket->header & RADIO_HEADER_CLIENT_ID_MASK;
+			pRadio->isScanning = 1;
+			pRadio->startScan = 0;
+			RadioBotSetChannel(pRadio, pRadio->activeChannel+1);
+			pRadio->stats.isBaseOnline = 0;
+			pRadio->isTxRequested = 0;
+		}
+		else if(pOp->rx.isPacketReceived)
+		{
+			SX1280LLDParsePacketStatus(&pOp->rx.rxStatus, pRadio->data.pModule->data.packetType, &pRadio->rxPacketStatus);
 
-			if(pPacket->header & RADIO_HEADER_DIR_FROM_BASE)
+			if(pRadio->rxPacketStatus.flrc.rx.syncError || pRadio->rxPacketStatus.gfsk.rx.syncError)
 			{
-				// Data from base station
-				RadioClientRx* pClient = &pRadio->fromBase[clientId];
-				if(pPacket->header & RADIO_HEADER_BROADCAST)
-					pClient = &pRadio->fromBase[RADIO_NUM_TOTAL_CLIENTS-1];
+				pRadio->stats.rxSyncError++;
 
-				pClient->avgRxRssi_mdBm = (pClient->avgRxRssi_mdBm * 3 + pRadio->rxPacketStatus.rssi_mdBm) >> 2;
-				pClient->lastReceivedTime_us = SysTimeUSec();
-				pClient->isOnline = 1;
-
-				if(pClient->expectedToggleBit != (pPacket->header & RADIO_HEADER_SEQ_TOGGLE))
-					pClient->rxPacketsLost++;
-
-				pRadio->lastBaseReceivedTime_us = SysTimeUSec();
-				pRadio->stats.isBaseOnline = 1;
-
-				if(RadioBufPutRxAirPacket(&pClient->buf, pPacket->payload, sizeof(pPacket->payload)))
+				if(pOp->pTrace)
 				{
-					pRadio->queuedEvents |= RADIO_BOT_EVENT_PACKET_RECEIVED;
-					NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+					RadioModuleOpTrace* pTrace = (RadioModuleOpTrace*)pOp->pTrace;
+					pTrace->id = 0xFF;
 				}
+			}
+			else if(pRadio->rxPacketStatus.flrc.rx.crcError || pRadio->rxPacketStatus.gfsk.rx.crcError)
+			{
+				pRadio->stats.rxCrcError++;
 
-				if(clientId == pRadio->data.clientId && (pPacket->header & RADIO_HEADER_BROADCAST) == 0)
+				if(pOp->pTrace)
 				{
-					pRadio->isTxRequested = 1;
-					pRadio->stats.baseCycleTime_us = pOp->pTrace->tReceive_us - pRadio->lastAddressedTime_us;
-					pRadio->lastAddressedTime_us = pOp->pTrace->tReceive_us;
+					RadioModuleOpTrace* pTrace = (RadioModuleOpTrace*)pOp->pTrace;
+					pTrace->id = 0xFF;
 				}
-
-				pClient->expectedToggleBit = (pPacket->header & RADIO_HEADER_SEQ_TOGGLE) ^ RADIO_HEADER_SEQ_TOGGLE;
 			}
 			else
 			{
-				RadioClientRx* pClient = &pRadio->fromBots[clientId];
-				pClient->avgRxRssi_mdBm = (pClient->avgRxRssi_mdBm * 3 + pRadio->rxPacketStatus.rssi_mdBm) >> 2;
-				pClient->lastReceivedTime_us = SysTimeUSec();
-				pClient->isOnline = 1;
+				pRadio->stats.rxPacketsGood++;
 
-				if(pClient->expectedToggleBit != (pPacket->header & RADIO_HEADER_SEQ_TOGGLE))
-					pClient->rxPacketsLost++;
+				RadioModuleAirPacket* pPacket = (RadioModuleAirPacket*)pOp->rx.data;
+				uint8_t clientId = pPacket->header & RADIO_HEADER_CLIENT_ID_MASK;
 
-				if(RadioBufPutRxAirPacket(&pClient->buf, pPacket->payload, sizeof(pPacket->payload)))
+				if(pPacket->header & RADIO_HEADER_DIR_FROM_BASE)
 				{
-					pRadio->queuedEvents |= RADIO_BOT_EVENT_PACKET_RECEIVED;
-					NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+					// Data from base station
+					RadioClientRx* pClient = &pRadio->fromBase[clientId];
+					if(pPacket->header & RADIO_HEADER_BROADCAST)
+						pClient = &pRadio->fromBase[RADIO_NUM_TOTAL_CLIENTS-1];
+
+					if(pClient->expectedSeq != 0)
+						pClient->rxPacketsLost += (uint8_t)(pPacket->seq - pClient->expectedSeq);
+
+					pClient->txPacketsLost += (uint8_t)(pPacket->rxSeqLoss - pClient->lastRxSeqLoss);
+
+					pClient->avgRxRssi_mdBm = (pClient->avgRxRssi_mdBm * 3 + pRadio->rxPacketStatus.rssi_mdBm) / 4;
+					pClient->lastReceivedTime_us = SysTimeUSec();
+					pClient->isOnline = 1;
+
+					pRadio->stats.lastReceivedRssiFromBaseStation_mdBm = pRadio->rxPacketStatus.rssi_mdBm;
+
+					if(pRadio->isScanning)
+					{
+						pRadio->queuedEvents |= RADIO_BOT_EVENT_SCAN_COMPLETE;
+						NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+					}
+
+					pRadio->lastBaseReceivedTime_us = SysTimeUSec();
+					pRadio->stats.isBaseOnline = 1;
+					pRadio->isScanning = 0;
+
+					if(RadioBufPutRxAirPacket(&pClient->buf, pPacket->payload, sizeof(pPacket->payload)))
+					{
+						pRadio->queuedEvents |= RADIO_BOT_EVENT_PACKET_RECEIVED_FROM_BASE;
+						NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+					}
+
+					if(clientId == pRadio->data.clientId && (pPacket->header & RADIO_HEADER_BROADCAST) == 0)
+					{
+						pRadio->isTxRequested = 1;
+						uint32_t newCycleTime_us = pOp->pTrace->tReceive_us - pRadio->lastAddressedTime_us;
+						pRadio->stats.baseCycleTime_us = (7*pRadio->stats.baseCycleTime_us + newCycleTime_us) / 8;
+						pRadio->lastAddressedTime_us = pOp->pTrace->tReceive_us;
+					}
+
+					pClient->expectedSeq = pPacket->seq + 1;
+					pClient->lastRxSeqLoss = pPacket->rxSeqLoss;
+				}
+				else
+				{
+					// Data from other robot
+					RadioClientRx* pClient = &pRadio->fromBots[clientId];
+
+					if(pClient->expectedSeq != 0)
+						pClient->rxPacketsLost += (uint8_t)(pPacket->seq - pClient->expectedSeq);
+
+					pClient->txPacketsLost += (uint8_t)(pPacket->rxSeqLoss - pClient->lastRxSeqLoss);
+
+					pClient->avgRxRssi_mdBm = (pClient->avgRxRssi_mdBm * 3 + pRadio->rxPacketStatus.rssi_mdBm) / 4;
+					pClient->lastReceivedTime_us = SysTimeUSec();
+					pClient->isOnline = 1;
+
+					if(RadioBufPutRxAirPacket(&pClient->buf, pPacket->payload, sizeof(pPacket->payload)))
+					{
+						pRadio->queuedEvents |= RADIO_BOT_EVENT_PACKET_RECEIVED_FROM_BOT;
+						NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+					}
+
+					pClient->expectedSeq = pPacket->seq + 1;
+					pClient->lastRxSeqLoss = pPacket->rxSeqLoss;
 				}
 
-				pClient->expectedToggleBit = (pPacket->header & RADIO_HEADER_SEQ_TOGGLE) ^ RADIO_HEADER_SEQ_TOGGLE;
-			}
-
-			if(pOp->pTrace)
-			{
-				RadioModuleOpTrace* pTrace = (RadioModuleOpTrace*)pOp->pTrace;
-				pTrace->id = pPacket->header & (RADIO_HEADER_CLIENT_ID_MASK | RADIO_HEADER_DIR_FROM_BASE | RADIO_HEADER_BROADCAST);
+				if(pOp->pTrace)
+				{
+					RadioModuleOpTrace* pTrace = (RadioModuleOpTrace*)pOp->pTrace;
+					pTrace->id = pPacket->header & (RADIO_HEADER_CLIENT_ID_MASK | RADIO_HEADER_DIR_FROM_BASE | RADIO_HEADER_BROADCAST);
+				}
 			}
 		}
-		else
+		else if(pRadio->isScanning)
 		{
-			pRadio->stats.rxInvalidHeader++;
+			if(pRadio->activeChannel == pRadio->lastScanChannel)
+			{
+				pRadio->isScanning = 0;
+				pRadio->queuedEvents |= RADIO_BOT_EVENT_SCAN_COMPLETE;
+				NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
+			}
+			else
+			{
+				RadioBotSetChannel(pRadio, pRadio->activeChannel+1);
+			}
 		}
 	}
 
@@ -206,13 +281,13 @@ static void phyOpDoneClient(const RadioPhyOp* pOp, void* pUser)
 
 	for(size_t i = 0; i < RADIO_NUM_TOTAL_CLIENTS; i++)
 	{
-		if(tNow_us - pRadio->fromBase[i].lastReceivedTime_us > pRadio->data.baseTimeout_us)
+		if(tNow_us - pRadio->fromBase[i].lastReceivedTime_us > pRadio->data.baseTimeout_us || pRadio->isScanning)
 			pRadio->fromBase[i].isOnline = 0;
 	}
 
 	for(size_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
 	{
-		if(tNow_us - pRadio->fromBots[i].lastReceivedTime_us > pRadio->data.baseTimeout_us)
+		if(tNow_us - pRadio->fromBots[i].lastReceivedTime_us > pRadio->data.baseTimeout_us || pRadio->isScanning)
 			pRadio->fromBots[i].isOnline = 0;
 	}
 }
@@ -226,12 +301,16 @@ static void phyOpPrepareNextClient(RadioPhyOp* pOp, void* pUser)
 
 	pOp->pTrace = (RadioPhyOpTrace*)pTrace;
 
-	if(pRadio->newFrequency && !pRadio->isTxRequested)
+	if(pRadio->newChannel && !pRadio->isTxRequested)
 	{
+		uint32_t newChannel = pRadio->newChannel & NEW_CHANNEL_CHANNEL_MASK;
+
 		pOp->type = RADIO_PHY_OP_CFG;
 		pOp->cfg.cmd.cmd = CMD_SET_RFFREQUENCY;
-		pOp->cfg.cmd.setRfFrequency.frequency_Hz = pRadio->newFrequency;
-		pRadio->newFrequency = 0;
+		pOp->cfg.cmd.timeout_us = 10000;
+		pOp->cfg.cmd.setRfFrequency.frequency_Hz = (2300UL + newChannel) * 1000000UL;
+		pRadio->activeChannel = newChannel;
+		pRadio->newChannel = 0;
 	}
 	else if(pRadio->mode == RADIO_MODE_OFF)
 	{
@@ -241,17 +320,29 @@ static void phyOpPrepareNextClient(RadioPhyOp* pOp, void* pUser)
 	{
 		pOp->type = RADIO_PHY_OP_TX;
 		pOp->tx.useTxDelay = 0;
+		if(pRadio->data.pModule->data.packetType == PACKET_TYPE_GFSK)
+		{
+			pOp->tx.txPeriodBase = PERIOD_TICK_SIZE_15625_NS;
+			pOp->tx.txPeriodCount = pRadio->data.pModule->data.settings.gfsk.longPreambleCount;
+		}
+		else
+		{
+			pOp->tx.txPeriodBase = PERIOD_TICK_SIZE_1000_US;
+			pOp->tx.txPeriodCount = 0;
+		}
+
 		pOp->tx.size = sizeof(RadioModuleAirPacket);
 		RadioModuleAirPacket* pPacket = (RadioModuleAirPacket*)pOp->tx.data;
-		pPacket->header = pRadio->data.clientId | pRadio->headerToggleBit;
-		pPacket->invHeader = pPacket->header ^ 0xFF;
+		pPacket->header = pRadio->data.clientId;
+		pPacket->seq = pRadio->nextSeqNumber;
+		pPacket->rxSeqLoss = pRadio->fromBase[pRadio->data.clientId].rxPacketsLost;
 		if(RadioBufGetTxAirPacket(&pRadio->toBase.buf, pPacket->payload, sizeof(pPacket->payload)))
 		{
 			pRadio->queuedEvents |= RADIO_BOT_EVENT_PACKET_TRANSMITTED;
 			NVIC_SetPendingIRQ(pRadio->data.lowPrioIRQn);
 		}
 
-		pRadio->headerToggleBit ^= RADIO_HEADER_SEQ_TOGGLE;
+		pRadio->nextSeqNumber++;
 	}
 	else
 	{
@@ -282,30 +373,64 @@ SHELL_CMD_IMPL(stat)
 
 	uint32_t tNow = SysTimeUSec();
 
-	printf("Client ID: %hu\r\n", (uint16_t)pRadio->data.clientId);
-	printf("Sync: %hu, losses: %u, cycle time: %uus (%.2fHz)\r\n", (uint16_t)pRadio->stats.isBaseOnline, pRadio->stats.baseTimeouts, pRadio->stats.baseCycleTime_us, 1e6f/pRadio->stats.baseCycleTime_us);
-	printf("RX invalid header:  %u\r\n", pRadio->stats.rxInvalidHeader);
-	printf("Time since last RX: %uus\r\n", tNow - pRadio->lastBaseReceivedTime_us);
+	uint32_t totalPacketsLost = 0;
+	float baseAvgRssi_dBm = 0.0f;
+	size_t numClients = 0;
 
-	printf("From base:\r\n");
-	printf("ID LastRx       RSSI     rxPTot  rxPLos rxBDisc rxBDOvr rxCDErr  rxBOvr rxBGood rxAppBy\r\n");
 	for(size_t i = 0; i < RADIO_NUM_TOTAL_CLIENTS; i++)
 	{
-		RadioClientRx* pClient = &pRadio->fromBase[i];
-		if(!pClient->isOnline)
+		totalPacketsLost += pRadio->fromBase[i].rxPacketsLost;
+
+		if(!pRadio->fromBase[i].isOnline)
 			continue;
 
-		RadioBufferStats* pStats = &pClient->buf.stats;
+		baseAvgRssi_dBm += pRadio->fromBase[i].avgRxRssi_mdBm * 1e-3f;
+		numClients++;
+	}
+
+	baseAvgRssi_dBm /= numClients;
+	if(numClients == 0)
+		baseAvgRssi_dBm = 0;
+
+	printf("Client ID: %hu\r\n", (uint16_t)pRadio->data.clientId);
+	printf("Channel: %hu, mode: %hu, scanning: %hu\r\n", (uint16_t)pRadio->activeChannel, (uint16_t)pRadio->mode, (uint16_t)pRadio->isScanning);
+	printf("Sync: %hu, losses: %u, cycle time: %uus (%.2fHz)\r\n", (uint16_t)pRadio->stats.isBaseOnline, pRadio->stats.baseTimeouts, pRadio->stats.baseCycleTime_us, 1e6f/pRadio->stats.baseCycleTime_us);
+	printf("Good: %u, Sync: %u, CRC: %u, Lost: %u\r\n", pRadio->stats.rxPacketsGood, pRadio->stats.rxSyncError, pRadio->stats.rxCrcError, totalPacketsLost);
+	float lossRate = (float)totalPacketsLost / (float)(pRadio->stats.rxPacketsGood + totalPacketsLost);
+	printf("Loss Rate: %.2f%%\r\n", lossRate*100.0f);
+	printf("Base RSSI: %.2fdBm\r\n", baseAvgRssi_dBm);
+	printf("Time since last RX: %uus\r\n", tNow - pRadio->lastBaseReceivedTime_us);
+
+	printf("To base:\r\n");
+	printf("    txPTot  txPLos  txPUdr     txBTot\r\n");
+
+	if(pRadio->data.clientId < RADIO_NUM_TOTAL_CLIENTS)
+	{
+		RadioClientRx* pClientRx = &pRadio->fromBase[pRadio->data.clientId];
+		RadioBufferStats* pStatsOut = &pRadio->toBase.buf.stats;
+
+		printf("%10u %7u %7u %10u\r\n", pStatsOut->txPacketsTotal, pClientRx->txPacketsLost, pStatsOut->txBufferUnderrun, pStatsOut->txBytesTotal);
+	}
+
+	printf("From base:\r\n");
+	printf("ID LastRx       RSSI     rxPTot  rxPLos rxBDisc rxBDOvr rxCDErr rxCRCErr rxBOvr rxBGood rxAppBy\r\n");
+	for(size_t i = 0; i < RADIO_NUM_TOTAL_CLIENTS; i++)
+	{
+		RadioClientRx* pClientRx = &pRadio->fromBase[i];
+		if(!pClientRx->isOnline)
+			continue;
+
+		RadioBufferStats* pStatsRx = &pClientRx->buf.stats;
 
 		tNow = SysTimeUSec();
 
-		printf("%2u %4ums % 7.2fdBm %10u %7u %7u %7u %7u %7u %7u %7u\r\n", i, (tNow - pClient->lastReceivedTime_us)/1000, pClient->avgRxRssi_mdBm * 0.001f,
-				pStats->rxPacketsTotal, pClient->rxPacketsLost, pStats->rxBytesDiscarded, pStats->rxBufferDataOverflows, pStats->rxCobsDecodingErrors,
-				pStats->rxBufferOverruns, pStats->rxBytesGood, pStats->rxAppBytes);
+		printf("%2u %4ums % 7.2fdBm %10u %7u %7u %7u %7u %7u %7u %7u %7u\r\n", i, (tNow - pClientRx->lastReceivedTime_us)/1000, pClientRx->avgRxRssi_mdBm * 0.001f,
+				pStatsRx->rxPacketsTotal, pClientRx->rxPacketsLost, pStatsRx->rxBytesDiscarded, pStatsRx->rxBufferDataOverflows, pStatsRx->rxCobsDecodingErrors,
+				pStatsRx->rxCrcErrors, pStatsRx->rxBufferOverruns, pStatsRx->rxBytesGood, pStatsRx->rxAppBytes);
 	}
 
 	printf("From bots:\r\n");
-	printf("ID LastRx       RSSI     rxPTot  rxPLos rxBDisc rxBDOvr rxCDErr  rxBOvr rxBGood rxAppBy\r\n");
+	printf("ID LastRx       RSSI     rxPTot  rxPLos rxBDisc rxBDOvr rxCDErr rxCRCErr rxBOvr rxBGood rxAppBy\r\n");
 	for(size_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
 	{
 		RadioClientRx* pClient = &pRadio->fromBots[i];
@@ -316,9 +441,55 @@ SHELL_CMD_IMPL(stat)
 
 		tNow = SysTimeUSec();
 
-		printf("%2u %4ums % 7.2fdBm %10u %7u %7u %7u %7u %7u %7u %7u\r\n", i, (tNow - pClient->lastReceivedTime_us)/1000, pClient->avgRxRssi_mdBm * 0.001f,
+		printf("%2u %4ums % 7.2fdBm %10u %7u %7u %7u %7u %7u %7u %7u %7u\r\n", i, (tNow - pClient->lastReceivedTime_us)/1000, pClient->avgRxRssi_mdBm * 0.001f,
 				pStats->rxPacketsTotal, pClient->rxPacketsLost, pStats->rxBytesDiscarded, pStats->rxBufferDataOverflows, pStats->rxCobsDecodingErrors,
-				pStats->rxBufferOverruns, pStats->rxBytesGood, pStats->rxAppBytes);
+				pStats->rxCrcErrors, pStats->rxBufferOverruns, pStats->rxBytesGood, pStats->rxAppBytes);
+	}
+}
+
+SHELL_CMD(clear, "Clear statistics");
+
+SHELL_CMD_IMPL(clear)
+{
+	(void)argc; (void)argv;
+	RadioBot* pRadio = (RadioBot*)pUser;
+
+	pRadio->stats.rxCrcError = 0;
+	pRadio->stats.rxSyncError = 0;
+	pRadio->stats.rxPacketsGood = 0;
+
+	for(size_t i = 0; i < RADIO_NUM_TOTAL_CLIENTS; i++)
+	{
+		pRadio->fromBase[i].rxPacketsLost = 0;
+		pRadio->fromBase[i].txPacketsLost = 0;
+		pRadio->fromBase[i].expectedSeq = 0;
+	}
+
+	for(size_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
+	{
+		pRadio->fromBots[i].rxPacketsLost = 0;
+		pRadio->fromBots[i].txPacketsLost = 0;
+		pRadio->fromBots[i].expectedSeq = 0;
+	}
+
+	printf("Radio statistics cleared\r\n");
+}
+
+SHELL_CMD(scan, "Scan for an active base station");
+
+SHELL_CMD_IMPL(scan)
+{
+	(void)argc; (void)argv;
+	RadioBot* pRadio = (RadioBot*)pUser;
+
+	if(RadioBotIsScanComplete(pRadio))
+	{
+		pRadio->startScan = 1;
+		printf("Scan started\r\n");
+	}
+	else
+	{
+		fprintf(stderr, "Scan already in progress\r\n");
 	}
 }
 
@@ -326,4 +497,6 @@ static void registerShellCommands(ShellCmdHandler* pHandler)
 {
 	ShellCmdAdd(pHandler, stat_command);
 	ShellCmdAdd(pHandler, trace_command);
+	ShellCmdAdd(pHandler, clear_command);
+	ShellCmdAdd(pHandler, scan_command);
 }

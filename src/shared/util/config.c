@@ -176,7 +176,6 @@ void ConfigTask(void* params)
 						continue;
 
 					PacketHeader* pHeader = (PacketHeader*)config.procData;
-					pHeader->section = SECTION_CONFIG;
 					pHeader->cmd = CMD_CONFIG_FILE_STRUCTURE;
 
 					ConfigFileStructure* pStruct = (ConfigFileStructure*)(config.procData+sizeof(PacketHeader));
@@ -219,7 +218,6 @@ void ConfigTask(void* params)
 				}
 
 				PacketHeader* pHeader = (PacketHeader*)config.procData;
-				pHeader->section = SECTION_CONFIG;
 				pHeader->cmd = CMD_CONFIG_READ;
 
 				ConfigReadWrite* pRead = (ConfigReadWrite*)(config.procData+sizeof(PacketHeader));
@@ -254,7 +252,6 @@ void ConfigTask(void* params)
 				}
 
 				PacketHeader* pHeader = (PacketHeader*)config.procData;
-				pHeader->section = SECTION_CONFIG;
 				pHeader->cmd = CMD_CONFIG_ITEM_DESC;
 
 				ConfigItemDesc* pDesc = (ConfigItemDesc*)(config.procData+sizeof(PacketHeader));
@@ -296,6 +293,8 @@ void ConfigTask(void* params)
 				chThdSleepMilliseconds(20);
 			}
 			break;
+			default:
+			break;
 		}
 	}
 }
@@ -307,9 +306,6 @@ void ConfigNetworkOutput(void* pData, uint16_t dataLength)
 
 void ConfigNetworkInput(PacketHeader* pHeader, uint8_t* pData, uint16_t dataLength)
 {
-	if(pHeader->section != SECTION_CONFIG)
-		return;
-
 	switch(pHeader->cmd)
 	{
 		case CMD_CONFIG_QUERY_FILE_LIST:
@@ -350,6 +346,8 @@ void ConfigNetworkInput(PacketHeader* pHeader, uint8_t* pData, uint16_t dataLeng
 
 			ConfigInternalInjectEvent(CONFIG_EVENT_SEND_FILE | pRead->id);
 		}
+		break;
+		default:
 		break;
 	}
 }

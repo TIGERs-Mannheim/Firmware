@@ -1,16 +1,11 @@
-/*
- * skill_basics.c
- *
- *  Created on: 24.06.2015
- *      Author: AndreR
- */
-
 #include "robot/skill_basics.h"
 #include "robot/network.h"
 #include "robot.h"
-#include "math/angle_math.h"
 #include "math/vector.h"
 #include "commands.h"
+#include "util/bits.h"
+
+#define ENABLE_ROLL_OUT_TESTING				0
 
 static void emergencyInit(const SkillInput* pInput);
 static void emergencyRun(const SkillInput* pInput, SkillOutput* pOutput);
@@ -20,15 +15,14 @@ static void globalPosRun(const SkillInput* pInput, SkillOutput* pOutput);
 static void wheelVelRun(const SkillInput* pInput, SkillOutput* pOutput);
 static void globalVelAndOrient(const SkillInput* pInput, SkillOutput* pOutput);
 static void localForceRun(const SkillInput* pInput, SkillOutput* pOutput);
-static void atTargetAngleInit(const SkillInput* pInput);
 
 SkillInstance skillEmergency = { &emergencyInit, &emergencyRun, 0 };
-SkillInstance skillLocalVel = { &atTargetAngleInit, &localVelRun, 0 };
-SkillInstance skillGlobalVel = { &atTargetAngleInit, &globalVelRun, 0 };
-SkillInstance skillGlobalPos = { &atTargetAngleInit, &globalPosRun, 0 };
-SkillInstance skillWheelVel = { &atTargetAngleInit, &wheelVelRun, 0 };
-SkillInstance skillGlobalVelAndOrient = {&atTargetAngleInit, &globalVelAndOrient, 0 };
-SkillInstance skillLocalForce = { &atTargetAngleInit, &localForceRun, 0 };
+SkillInstance skillLocalVel = { 0, &localVelRun, 0 };
+SkillInstance skillGlobalVel = { 0, &globalVelRun, 0 };
+SkillInstance skillGlobalPos = { 0, &globalPosRun, 0 };
+SkillInstance skillWheelVel = { 0, &wheelVelRun, 0 };
+SkillInstance skillGlobalVelAndOrient = {0, &globalVelAndOrient, 0 };
+SkillInstance skillLocalForce = { 0, &localForceRun, 0 };
 
 typedef struct PACKED _GlobalVelXYPosWInput
 {
@@ -57,93 +51,58 @@ typedef struct PACKED _LocalForceInput
 	BasicKDInput kd;
 } ForceInput;
 
-static uint8_t atTargetAngle;
-
 void SkillBasicsSetKDInputKicker(BasicKDInput* pKD, uint8_t kickMode, uint8_t kickDevice, float kickSpeed)
 {
-	pKD->flags &= ~(BASIC_KD_FLAGS_KICK_DEVICE_MASK | BASIC_KD_FLAGS_KICK_MODE_MASK);
+	int32_t kickSpeedBits = (int32_t)(kickSpeed*50.0f + 0.5f);
+	if(kickSpeedBits < 0)
+		kickSpeedBits = 0;
+	else if(kickSpeedBits > 0x1FF)
+		kickSpeedBits = 0x1FF;
 
-	pKD->flags |= kickDevice | (kickMode << 4);
-	pKD->kickSpeed = (uint8_t)(kickSpeed*25.0f);
+	kickDevice &= 0x01;
+	kickMode &= 0x0F;
+
+	BitsPack(pKD->data, 0, 9, kickSpeedBits);
+	BitsPack(pKD->data, 9, 1, kickDevice);
+	BitsPack(pKD->data, 10, 2, kickMode);
 }
 
 void SkillBasicsSetKDInputDribbler(BasicKDInput* pKD, float dribbleSpeed_mDs, float maxForce_N)
 {
-	int32_t speed = (int32_t)(dribbleSpeed_mDs * 4.0f + 0.5f);
-	int32_t force = (int32_t)(maxForce_N * 2.0f + 0.05f);
+	int32_t speed = (int32_t)(dribbleSpeed_mDs * 8.0f + 0.5f);
+	int32_t force = (int32_t)(maxForce_N * 4.0f + 0.5f);
 
 	if(speed < 0)
 		speed = 0;
+	else if(speed > 0x3F)
+		speed = 0x3F;
 
 	if(force < 0)
 		force = 0;
+	else if(force > 0x3F)
+		force = 0x3F;
 
-	pKD->dribbler = (speed >> 1) & 0x0F;
-	pKD->dribbler |= (force << 3) & 0xF0;
-
-	pKD->flags &= ~(BASIC_KD_FLAGS_DRIB_SPEED_LSB | BASIC_KD_FLAGS_DRIB_FORCE_LSB);
-
-	if(speed & 0x01)
-		pKD->flags |= BASIC_KD_FLAGS_DRIB_SPEED_LSB;
-
-	if(force & 0x01)
-		pKD->flags |= BASIC_KD_FLAGS_DRIB_FORCE_LSB;
+	BitsPack(pKD->data, 12, 6, speed);
+	BitsPack(pKD->data, 18, 6, force);
 }
 
-void SkillBasicsParseKDInput(const SkillInput* pInput, const BasicKDInput* pKD, SkillOutput* pOutput)
+void SkillBasicsParseKDInput(const BasicKDInput* pKD, SkillOutput* pOutput)
 {
-	pOutput->kicker.device = pKD->flags & BASIC_KD_FLAGS_KICK_DEVICE_MASK;
-	pOutput->kicker.mode = (pKD->flags & BASIC_KD_FLAGS_KICK_MODE_MASK) >> 4;
+	pOutput->kicker.device = BitsUnpack(pKD->data, 9, 1);
+	pOutput->kicker.mode = BitsUnpack(pKD->data, 10, 2);
 
+	uint16_t kickBits = BitsUnpack(pKD->data, 0, 9);
 	if(pOutput->kicker.mode == KICKER_MODE_ARM_TIME)
-	{
-		uint32_t timeHighBits = (pKD->flags & BASIC_KD_FLAGS_EXTRA_MASK) >> 1;
-		uint32_t time10Us = (timeHighBits << 8) + pKD->kickSpeed;
-		pOutput->kicker.speed = time10Us*1e-5f; // convert to [s]
-	}
+		pOutput->kicker.speed = kickBits*25e-6f; // convert to [s]
 	else
-	{
-		// convert [0.04 m/s] to float
-		float kickSpeed = pKD->kickSpeed*0.04f;
-		pOutput->kicker.speed = kickSpeed;
-	}
+		pOutput->kicker.speed = kickBits*0.02f; // convert to [m/s]
 
-	if(pOutput->kicker.mode == KICKER_MODE_ARM_AIM && pOutput->drive.modeW == DRIVE_MODE_GLOBAL_POS)
-	{
-		float angDiff = AngleNormalize(pOutput->drive.pos[2] - pInput->pState->pos[2]);
-		if(fabsf(angDiff) < 0.005f)
-			atTargetAngle = 1;
-		if(fabsf(angDiff) > 0.01f)
-			atTargetAngle = 0;
-
-		if(atTargetAngle == 0)
-			pOutput->kicker.mode = KICKER_MODE_DISARM;
-		else
-			pOutput->kicker.mode = KICKER_MODE_ARM;
-	}
-
-	uint8_t dribblerSpeed = (pKD->dribbler & 0x0F) << 1;
-	uint8_t dribblerForce = (pKD->dribbler & 0xF0) >> 3;
-
-	if(pOutput->kicker.mode != KICKER_MODE_ARM_TIME)
-	{
-		if(pKD->flags & BASIC_KD_FLAGS_DRIB_SPEED_LSB)
-			dribblerSpeed |= 0x01;
-
-		if(pKD->flags & BASIC_KD_FLAGS_DRIB_FORCE_LSB)
-			dribblerForce |= 0x01;
-	}
+	uint8_t dribblerSpeedBits = BitsUnpack(pKD->data, 12, 6);
+	uint8_t dribblerForceBits = BitsUnpack(pKD->data, 18, 6);
 
 	pOutput->dribbler.mode = DRIBBLER_MODE_SPEED;
-	pOutput->dribbler.velocity = dribblerSpeed*0.25f;
-	pOutput->dribbler.maxForce = dribblerForce*0.5f;
-}
-
-static void atTargetAngleInit(const SkillInput* pInput)
-{
-	(void)pInput;
-
-	atTargetAngle = 0;
+	pOutput->dribbler.velocity = dribblerSpeedBits*0.125f;
+	pOutput->dribbler.maxForce = dribblerForceBits*0.25f;
 }
 
 static void localVelRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -174,7 +133,7 @@ static void localVelRun(const SkillInput* pInput, SkillOutput* pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
 	pOutput->drive.modeW = DRIVE_MODE_LOCAL_VEL;
 
-	SkillBasicsParseKDInput(pInput, &pVel->kd, pOutput);
+	SkillBasicsParseKDInput(&pVel->kd, pOutput);
 }
 
 static void localForceRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -193,7 +152,7 @@ static void localForceRun(const SkillInput* pInput, SkillOutput* pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_FORCE;
 	pOutput->drive.modeW = DRIVE_MODE_LOCAL_FORCE;
 
-	SkillBasicsParseKDInput(pInput, &pForce->kd, pOutput);
+	SkillBasicsParseKDInput(&pForce->kd, pOutput);
 }
 
 static void globalVelRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -226,7 +185,7 @@ static void globalVelRun(const SkillInput* pInput, SkillOutput* pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
 	pOutput->drive.modeW = DRIVE_MODE_LOCAL_VEL;
 
-	SkillBasicsParseKDInput(pInput, &pVel->kd, pOutput);
+	SkillBasicsParseKDInput(&pVel->kd, pOutput);
 }
 
 static void globalPosRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -266,7 +225,7 @@ static void globalPosRun(const SkillInput* pInput, SkillOutput* pOutput)
 
 	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
 
-	SkillBasicsParseKDInput(pInput, &pPos->kd, pOutput);
+	SkillBasicsParseKDInput(&pPos->kd, pOutput);
 }
 
 static void wheelVelRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -281,7 +240,7 @@ static void wheelVelRun(const SkillInput* pInput, SkillOutput* pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_WHEEL_VEL;
 	pOutput->drive.modeW = DRIVE_MODE_WHEEL_VEL;
 
-	SkillBasicsParseKDInput(pInput, &pVel->kd, pOutput);
+	SkillBasicsParseKDInput(&pVel->kd, pOutput);
 }
 
 static void globalVelAndOrient(const SkillInput* pInput, SkillOutput* pOutput)
@@ -314,7 +273,7 @@ static void globalVelAndOrient(const SkillInput* pInput, SkillOutput* pOutput)
 	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_VEL;
 	pOutput->drive.modeW = DRIVE_MODE_GLOBAL_POS;
 
-	SkillBasicsParseKDInput(pInput, &pVel->kd, pOutput);
+	SkillBasicsParseKDInput(&pVel->kd, pOutput);
 }
 
 SkillEmergencyData emergency = {
@@ -386,15 +345,10 @@ static void emergencyRun(const SkillInput* pInput, SkillOutput* pOutput)
 			pOutput->drive.wheelVel[i] *= CTRL_MOTOR_TO_WHEEL_RATIO;
 	}
 
-// this is just used for roll-out testing
-//	pOutput->drive.modeXY = DRIVE_MODE_OFF;
-//	pOutput->drive.modeW = DRIVE_MODE_OFF;
-
-//	pOutput->drive.localForce[0] = 0.0f;
-//	pOutput->drive.localForce[1] = 0.0f;
-//	pOutput->drive.localForce[2] = 0.0f;
-//	pOutput->drive.modeXY = DRIVE_MODE_LOCAL_FORCE;
-//	pOutput->drive.modeW = DRIVE_MODE_LOCAL_FORCE;
+#if ENABLE_ROLL_OUT_TESTING
+	pOutput->drive.modeXY = DRIVE_MODE_OFF;
+	pOutput->drive.modeW = DRIVE_MODE_OFF;
+#endif
 
 	pOutput->dribbler.mode = DRIBBLER_MODE_OFF;
 	pOutput->kicker.mode = KICKER_MODE_DISARM;

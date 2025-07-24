@@ -47,13 +47,20 @@ uint8_t MACCompare(MAC mac1, MAC mac2);
 MAC		MACSet(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f);
 const char* MACFormatAddress(MAC mac);
 
+#define MAC_BROADCAST (MAC){{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }}
+#define MAC_ZEROS (MAC){{ 0, 0, 0, 0, 0, 0 }}
+
 // IP functions
 uint16_t IPv4CalcChecksum(const void* pData, uint16_t length);
 IPv4Address IPv4AddressSet(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 MAC IPv4CalcMulticastMAC(IPv4Address addr);
 uint8_t IPv4IsMulticastAddress(IPv4Address addr);
+uint8_t IPv4IsLimitedBroadcastAddress(IPv4Address addr);
 int16_t IPv4ParseAddress(const char* pString, IPv4Address* pIp);
 const char* IPv4FormatAddress(IPv4Address ip);
+
+#define IPV4_ADDRESS_ZEROS (IPv4Address){{ 0, 0, 0, 0 }}
+#define IPV4_ADDRESS_LIMITED_BROADCAST (IPv4Address){{ 255, 255, 255, 255 }}
 
 // PPP checksum function
 uint16_t pppfcs16(uint8_t* cp, uint16_t len, uint16_t fcs);
@@ -117,7 +124,7 @@ typedef union PACKED _UDPHeader
 		uint16_t srcPort;
 		uint16_t dstPort;
 		uint16_t length;	// data + header
-		uint16_t crc;		// cann be 0 if not used
+		uint16_t crc;		// can be 0 if not used
 	};
 
 	uint8_t _data[UDP_HEADER_SIZE];
@@ -301,3 +308,67 @@ typedef union PACKED _NTPPacket
 
 	uint8_t _data[NTP_PACKET_SIZE];
 } NTPPacket;
+
+#define UDP_PORT_DHCP_SERVER 67
+#define UDP_PORT_DHCP_CLIENT 68
+
+typedef struct _DHCPMessage // According to RFC 2131
+{
+	uint8_t op;			// Message op code / message type
+	uint8_t htype;		// Hardware address type
+	uint8_t hlen;		// Hardware address length
+	uint8_t hops;		// Hops (used by relay agents)
+	uint32_t xid;		// Transaction ID
+	uint16_t secs;		// Seconds elapsed
+	uint16_t flags;		// Flags
+	IPv4Address ciaddr; // Client IP address
+	IPv4Address yiaddr; // 'Your' (client) IP address
+	IPv4Address siaddr; // Server IP address
+	IPv4Address giaddr; // Relay agent IP address
+	uint8_t chaddr[16]; // Client hardware address
+	uint8_t sname[64];	// Optional server host name
+	uint8_t file[128];	// Boot file name
+						// Followed by a variable length list of options
+} DHCPMessage;
+
+#define UDP_PORT_MDNS 5353
+
+typedef struct PACKED
+{
+	uint16_t id;
+
+	union PACKED
+	{
+		struct PACKED
+		{
+			uint16_t rcode:4;
+			uint16_t reserved:3;
+			uint16_t recursionAvailable:1;
+			uint16_t recursionDesired:1;
+			uint16_t truncation:1;
+			uint16_t authoritiveAnswer:1;
+			uint16_t opcode:4;
+			uint16_t isResponse:1;
+		};
+
+		uint16_t flags;
+	};
+
+	uint16_t numQuestions;
+	uint16_t numAnswers;
+	uint16_t numAuthoritiveRecords;
+	uint16_t numAdditionalRecords;
+} DNSHeader;
+
+#define DNS_RECORD_CLASS_IN		1
+#define DNS_RECORD_CLASS_ANY	255
+
+#define DNS_RECORD_TYPE_A		1
+#define DNS_RECORD_TYPE_CNAME	5
+#define DNS_RECORD_TYPE_PTR		12
+#define DNS_RECORD_TYPE_HINFO	13
+#define DNS_RECORD_TYPE_MX		15
+#define DNS_RECORD_TYPE_TXT		16
+#define DNS_RECORD_TYPE_AAAA	28
+#define DNS_RECORD_TYPE_NSEC	47
+#define DNS_RECORD_TYPE_ANY		255

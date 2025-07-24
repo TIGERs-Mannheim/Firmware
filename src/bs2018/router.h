@@ -15,11 +15,24 @@ typedef struct _RouterClient
 	uint32_t tLastVisionCapture_us;
 
 	SystemMatchFeedback lastMatchFeedback;
-} RouterClient;
+} RouterClientBot;
+
+typedef struct _RouterBroadcast
+{
+	BaseStationBroadcast sumatraData;
+	mutex_t sumatraMtx;
+
+	uint8_t broadcastData[sizeof(BaseStationBroadcast) + sizeof(PacketHeader)];
+	BaseStationBroadcast* pBroadcastCmd;
+
+	uint8_t baseStationId;
+	uint32_t tLastBallVisionCapture_us;
+} RouterBroadcast;
 
 typedef struct _Router
 {
-	RouterClient bots[RADIO_NUM_ROBOT_CLIENTS];
+	RouterClientBot bots[RADIO_NUM_ROBOT_CLIENTS];
+	RouterBroadcast broadcast;
 
 	THD_WORKING_AREA(waRxTask, 2048);
 	thread_t* pRxTask;

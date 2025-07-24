@@ -37,6 +37,15 @@ typedef struct _TigerBot
 	// High-Level Task
 	THD_WORKING_AREA(waTask, 2048);
 	thread_t* pTask;
+
+	// Data storage
+	struct
+	{
+		uint8_t kickDevice;
+		float kickDuration_s;
+		float dribblerVel_mDs;
+		float dribblerForce_N;
+	} lastKickState;
 } TigerBot;
 
 extern TigerBot tigerBot;

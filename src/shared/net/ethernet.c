@@ -27,11 +27,7 @@ int16_t EthernetSend(Ethernet* pEth, NetPkt* pPkt)
 
 	pHeader->type = htons(pPkt->ethernet.type);
 	pHeader->dstMAC = pPkt->ethernet.dst;
-
-	if(pPkt->ethernet.src.u16[0] == 0 && pPkt->ethernet.src.u16[1] == 0 && pPkt->ethernet.src.u16[2] == 0)
-		pHeader->srcMAC = pEth->pIf->data.mac;
-	else
-		pHeader->srcMAC = pPkt->ethernet.src;
+	pHeader->srcMAC = pPkt->ethernet.src;
 
 	pEth->txFramesGood++;
 

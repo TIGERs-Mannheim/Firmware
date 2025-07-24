@@ -17,6 +17,9 @@ typedef struct _Song
 	const BuzzerSequence* pSequence;
 } Song;
 
+extern const BuzzerSequence buzzSeqShortLow;
+extern const BuzzerSequence buzzSeqShortMid;
+extern const BuzzerSequence buzzSeqShortHigh;
 extern const BuzzerSequence buzzSeqBeepFast;
 extern const BuzzerSequence buzzSeqUp50;
 extern const BuzzerSequence buzzSeqUp20;
@@ -32,6 +35,7 @@ extern const BuzzerSequence buzzSeqTetris;
 extern const BuzzerSequence buzzSeqEyeLead;
 extern const BuzzerSequence buzzSeqEyeFollow;
 extern const BuzzerSequence buzzSeqMacarena;
+extern const BuzzerSequence buzzSeqImperial;
 
 void SongsLoad();
 void SongsGetList(const Song** ppSongs, size_t* pNumSongs);

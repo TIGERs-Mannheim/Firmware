@@ -1,6 +1,7 @@
 #include "kicker.h"
 #include "errors.h"
 #include "util/log.h"
+#include "hal/sys_time.h"
 
 #define EVENT_MASK_TIMER_PULSE_DONE	EVENT_MASK(0)
 #define EVENT_MASK_ADC_KICKER		EVENT_MASK(1)
@@ -40,7 +41,6 @@ static const ElementDesc kickCfgElements[] =
 {
 	{ FLOAT, "max_voltage", "V", "Max. Voltage" },
 	{ FLOAT, "chg_hyst", "V", "Charge Hysteresis" },
-	{ UINT32, "cooldown", "ms", "Cooldown" },
 	{ FLOAT, "ir_ignore", "0.0-1.0", "Ignore Kick Threshold" },
 	{ FLOAT, "kick_offset", "", "Kick Conv. Offset" },
 	{ FLOAT, "kick_slope", "", "Kick Conv. Slope" },
@@ -54,12 +54,15 @@ static const ElementDesc kickCfgElements[] =
 	{ FLOAT, "dribble_slope", "m/(s*N)", "Dribble Force->Speed Slope" },
 	{ FLOAT, "dribble_chip_offset", "m/s", "Dribble Force->Speed Offset, Chip" },
 	{ FLOAT, "dribble_chip_slope", "m/(s*N)", "Dribble Force->Speed Slope, Chip" },
+	{ UINT16, "cooldown", "ms", "Cooldown" },
+	{ UINT8, "ir_thresh", "%", "IR int. below this value" },
 };
 
 void KickerInit(Kicker* pKicker, KickerData* pInit, tprio_t prio)
 {
 	chVTObjectInit(&pKicker->cooldownTimer);
 	chMtxObjectInit(&pKicker->kick.writeMutex);
+	chEvtObjectInit(&pKicker->eventSource);
 
 	pKicker->pAdcKicker = pInit->pAdcKicker;
 	pKicker->pMcuDribbler = pInit->pMcuDribbler;
@@ -187,6 +190,13 @@ void KickerSetCooldown(Kicker* pKicker, uint32_t cooldown_ms)
 	ConfigNotifyUpdate(pKicker->pConfigFile);
 }
 
+void KickerSetIrThreshold(Kicker* pKicker, uint8_t percentage)
+{
+	pKicker->pConfig->irThreshold = percentage;
+
+	ConfigNotifyUpdate(pKicker->pConfigFile);
+}
+
 uint8_t KickerIsCharged(Kicker* pKicker)
 {
 	return pKicker->charger.capAvgFast.value >= pKicker->pConfig->maxVoltage_V - pKicker->pConfig->chgHysteresis_V;
@@ -254,6 +264,10 @@ static void kickerTask(void* pParam)
 		{
 			mcuDribblerUpdate(pKicker);
 		}
+
+		uint32_t timeSinceLastMcuDribblerMeasurement_us = SysTimeUSec() - pKicker->barrier.timestamp_us;
+		if(timeSinceLastMcuDribblerMeasurement_us > 1000000)
+			pKicker->errorFlags |= KICKER_ERROR_IR_RX_DMG | KICKER_ERROR_IR_TX_DMG;
 
 		checkKickTriggers(pKicker);
 
@@ -447,6 +461,8 @@ static void startKick(Kicker* pKicker)
 
 	pKicker->kick.capVoltageBeforeKick_V = pKicker->charger.capAvgFast.value;
 
+	chEvtBroadcastFlags(&pKicker->eventSource, KICKER_EVENT_KICK_STARTED);
+
 	if(pKicker->kick.device == KICKER_DEVICE_STRAIGHT)
 		TimerOpmPulse(pKicker->pTimerStraight, pKicker->kick.duration_s*1e6f);
 	else
@@ -548,7 +564,7 @@ static void mcuDribblerUpdate(Kicker* pKicker)
 			float emaDiff = pKicker->barrier.emaAutoIrOn.value - pKicker->barrier.emaAutoIrOff.value;
 			if(emaDiff > 0.05f)
 			{
-				pKicker->barrier.irAutoThreshold = emaDiff*0.5f;
+				pKicker->barrier.irAutoThreshold = emaDiff * (pKicker->pConfig->irThreshold*0.01f);
 			}
 		}
 
@@ -601,6 +617,7 @@ SHELL_CMD_IMPL(status)
 	printf("Cap:  %.3fV (%.1fV)\r\n", pKicker->charger.capAvgFast.value, pKicker->pConfig->maxVoltage_V);
 	printf("Temp: %.2fC\r\n", pKicker->charger.boardTemp_degC);
 	printf("IR: %.3f / %.3f (%.3f / %.3f)\r\n", pIr->barrierOff_V, pIr->barrierOn_V, pKicker->barrier.emaIrOff.value, pKicker->barrier.emaIrOn.value);
+	printf("IR Thresh: %hu%% => %.3f\r\n", (uint16_t)pKicker->pConfig->irThreshold, pKicker->barrier.irAutoThreshold);
 	printf("Kick State: %hu, Charge Mode: %hu, Cnt: %hu\r\n", (uint16_t)pKicker->kick.state, pKicker->charger.mode, (uint16_t)pKicker->kick.numKicks);
 
 	printf("Last kick usage: %.3fV\r\n", pKicker->kick.lastCapVoltageUsed_V);
@@ -772,6 +789,26 @@ SHELL_CMD_IMPL(arm)
 	}
 }
 
+SHELL_CMD(thresh, "Set IR interrupted theshold",
+	SHELL_ARG(perc, "Percentage of IR threshold")
+);
+
+SHELL_CMD_IMPL(thresh)
+{
+	(void)argc;
+	Kicker* pKicker = (Kicker*)pUser;
+
+	int percentage = atoi(argv[1]);
+	if(percentage < 0)
+		percentage = 0;
+	else if(percentage > 99)
+		percentage = 99;
+
+	printf("Set IR threshold to %d%%\r\n", percentage);
+
+	KickerSetIrThreshold(pKicker, percentage);
+}
+
 static void registerShellCommands(ShellCmdHandler* pHandler)
 {
 	ShellCmdAdd(pHandler, status_command);
@@ -782,4 +819,5 @@ static void registerShellCommands(ShellCmdHandler* pHandler)
 	ShellCmdAdd(pHandler, dis_command);
 	ShellCmdAdd(pHandler, diss_command);
 	ShellCmdAdd(pHandler, arm_command);
+	ShellCmdAdd(pHandler, thresh_command);
 }

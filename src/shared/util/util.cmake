@@ -1,4 +1,5 @@
 list(APPEND util_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/bits.c
     ${CMAKE_CURRENT_LIST_DIR}/bmp.c
     ${CMAKE_CURRENT_LIST_DIR}/bootloader_protocol.c
     ${CMAKE_CURRENT_LIST_DIR}/cobs.c

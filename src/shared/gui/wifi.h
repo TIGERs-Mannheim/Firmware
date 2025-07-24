@@ -1,15 +1,19 @@
-/*
- * wifi_settings.h
- *
- *  Created on: 09.01.2019
- *      Author: AndreR
- */
-
 #pragma once
 
 #include "gfx.h"
-#include "intercom_constants.h"
+#include "robot/network.h"
+
+typedef struct _PresenterWifiStat
+{
+	NetworkMode networkMode;
+	uint8_t sumatraOnline;
+	uint8_t bsOnline;
+	uint8_t channel;
+	uint8_t botId;
+	uint16_t updateFreq;  // [Hz]
+	uint16_t visionDelay; // [us]
+	float rssi;			  // [dBm]
+} PresenterWifiStat;
 
 GHandle WifiCreate();
-void	WifiUpdateConfig(ConfigNetwork* pConfig);
-void	WifiUpdateStatus(PresenterWifiStat* pStat);
+void WifiUpdateStatus(PresenterWifiStat* pStat);

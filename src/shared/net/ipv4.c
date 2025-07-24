@@ -27,10 +27,15 @@ int16_t IPv4Send(IPv4* pIp, NetPkt* pPkt)
 		return ipv4DoSend(pIp, pPkt, IPv4CalcMulticastMAC(pPkt->ipv4.dst));
 	}
 
+	if(IPv4IsLimitedBroadcastAddress(pPkt->ipv4.dst))
+	{
+		return ipv4DoSend(pIp, pPkt, MAC_BROADCAST);
+	}
+
 	const MAC* pDstMac = ArpCacheLookup(&pIp->pIf->arp, pPkt->ipv4.dst);
 	if(!pDstMac)
 	{
-		ArpSend(&pIp->pIf->arp, ARP_OPERATION_REQUEST, MACSet(255, 255, 255, 255, 255, 255), pPkt->ipv4.dst);
+		ArpSend(&pIp->pIf->arp, ARP_OPERATION_REQUEST, MAC_BROADCAST, pPkt->ipv4.dst);
 
 		ListPushBack(&pIp->pendingPacketList, pPkt);
 
@@ -106,14 +111,9 @@ static int16_t ipv4DoSend(IPv4* pIp, NetPkt* pPkt, MAC dstMac)
 	pHeader->flags = 2;
 	pHeader->fragmentOffset = 0;
 	pHeader->fragment = htons(pHeader->fragment);
-	pHeader->ttl = pPkt->ipv4.ttl == 0 ? 64 : pPkt->ipv4.ttl;
+	pHeader->ttl = pPkt->ipv4.ttl;
 	pHeader->protocol = pPkt->ipv4.protocol;
-
-	if(pPkt->ipv4.src.u32 == 0)
-		pHeader->srcIP = pIp->pIf->data.ip;
-	else
-		pHeader->srcIP = pPkt->ipv4.src;
-
+	pHeader->srcIP = pPkt->ipv4.src;
 	pHeader->dstIP = pPkt->ipv4.dst;
 	pHeader->headerCRC = 0;
 
@@ -157,6 +157,12 @@ static NetVerdict receive(NetPkt* pPkt, void* pUser)
 	{
 		pIp->rxFramesDropped++;
 		return NET_VERDICT_DROP;
+	}
+
+	if(dataSize > totalLength)
+	{
+		// Remove extra data at end, this is probably from Ethernet frame padding (64 bytes minimum size)
+		NetBufRemove(pData, dataSize - totalLength);
 	}
 
 	pPkt->ipv4.protocol = pHeader->protocol;

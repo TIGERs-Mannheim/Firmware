@@ -25,7 +25,7 @@ uint8_t guiHeapBuffer[GUI_HEAP_SIZE] __attribute__((aligned(sizeof(stkalign_t)))
 
 typedef int16_t(*EventHandlerFunc)(GEvent*);
 
-static struct _handles
+static struct
 {
 	GHandle hTopBar;
 	GHandle hMenu;
@@ -40,7 +40,8 @@ static void setupChangedCallback(const SetupData* pSetup)
 	RadioBaseSetMaxBots(&baseStation.radioBase, pSetup->wifi.maxBots);
 	RadioBaseSaveConfig(&baseStation.radioBase);
 
-	BaseStationSetIp(pSetup->eth.ip);
+	BaseStationSetStaticIp(pSetup->eth.ip);
+	BaseStationEnableDhcp(pSetup->eth.useDhcp);
 	BaseStationSetPort(pSetup->eth.port);
 	BaseStationSetVisionIp(pSetup->vision.ip);
 	BaseStationSetVisionPort(pSetup->vision.port);
@@ -140,18 +141,17 @@ static void presenterTask(void*)
 		{
 			last50msCall = chVTGetSystemTimeX();
 
-//			RobotStatusPositionFrameUpdate(); // TODO: re-enable or delete?
-
 			TopBarSetEthStats(eth0.rates.rxBytesProcessed, eth0.rates.txBytesProcessed);
 			TopBarSetEthLinkStatus(eth0.linkStatus.up, eth0.linkStatus.speed100M);
-			TopBarSetEthIP(baseStation.config.base.ip.u8, baseStation.config.base.port);
+
+			TopBarSetEthConfig(&baseStation.networkInterface, baseStation.config.base.port);
 			TopBarSetWifiStatus(baseStation.radioBase.config.channel, RadioBaseGetNumBotsOnline(&baseStation.radioBase), RadioBaseGetLinkQuality(&baseStation.radioBase));
 			TopBarSetRemotes(baseStation.vision.isOnline, baseStation.sumatra.isOnline);
 			TopBarSetTime(RTCGetUnixTimestamp());
 
 			RobotStatusUpdate(presenter.robotInfo, baseStation.vision.isOnline);
 
-			SetupUpdate(&baseStation.config, &baseStation.radioBase.config);
+			SetupUpdate(&baseStation.config, &baseStation.radioBase.config, &baseStation.networkInterface);
 		}
 
 		if(pEvent == 0)

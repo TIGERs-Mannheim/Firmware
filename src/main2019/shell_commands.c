@@ -358,28 +358,31 @@ SHELL_CMD_IMPL(state)
 	printf("On vision: %hu\r\n", fusionEKF.vision.online);
 	printf("tLastValidSample: %u\r\n", fusionEKF.vision.timeLastValidSample);
 	printf("late meas: %u\r\n", fusionEKF.vision.numLateMeasurements);
-	printf("No vision in network: %u\r\n", robot.sensors.vision.noVision);
+	printf("No vision in network: %u\r\n\r\n", robot.sensors.vision.noVision);
 
 	printf("### Robot State ###\r\n");
 	printf("state pos: %.3f, %.3f, %.3f\r\n", robot.state.pos[0], robot.state.pos[1], robot.state.pos[2]);
-	printf("state vel: %.3f, %.3f, %.3f\r\n", robot.state.vel[0], robot.state.vel[1], robot.state.vel[2]);
+	printf("state vel: %.3f, %.3f, %.3f\r\n\r\n", robot.state.vel[0], robot.state.vel[1], robot.state.vel[2]);
 
 	printf("### Watchdog ###\r\n");
-	printf("Z: %f\r\n", robot.accZ);
+	printf("Z: %f\r\n\r\n", robot.accZ);
 
 	printf("### Ball State ###\r\n");
 	printf("State: %u\r\n", robot.state.ballState);
 	printf("Pos: %.3f, %.3f\r\n", robot.state.ballPos[0], robot.state.ballPos[1]);
-	printf("Vel: %.3f, %.3f\r\n", robot.state.ballVel[0], robot.state.ballVel[1]);
+	printf("Vel: %.3f, %.3f\r\n\r\n", robot.state.ballVel[0], robot.state.ballVel[1]);
 
 	printf("### Magnetometer ###\r\n");
 	printf("Mag: %.4f, %.4f, %.4f\r\n", robot.sensors.mag.strength[0], robot.sensors.mag.strength[1], robot.sensors.mag.strength[2]);
-	printf("ZMag: %.4f, ZState: %.4f", robot.state.magZ, robot.state.pos[2]);
+	printf("ZMag: %.4f, ZState: %.4f\r\n\r\n", robot.state.magZ, robot.state.pos[2]);
 
-	printf("### Limits ###\r\n");
-	printf("XY mode: %u, W mode: %u\r\n", robot.skillOutput.drive.modeXY, robot.skillOutput.drive.modeW);
-	printf("XY Acc: %f, W Acc: %f\r\n", robot.skillOutput.drive.limits.accMaxXY, robot.skillOutput.drive.limits.accMaxW);
-	printf("Skill: %hu\r\n", (uint16_t) skills.input.skillId);
+	printf("### Vision Ball ###\r\n");
+	printf("Cam ID: %u, delay: %uus\r\n", robot.sensors.visionBall.camId, robot.sensors.visionBall.delay);
+	printf("Pos: %.3f, %.3f\r\n\r\n", robot.sensors.visionBall.pos[0], robot.sensors.visionBall.pos[1]);
+
+	printf("### Geometry ###\r\n");
+	printf("Field size: %.2f x %.2fm, boundary: %.2fm\r\n", robot.sensors.visionGeometry.fieldSize[0], robot.sensors.visionGeometry.fieldSize[1], robot.sensors.visionGeometry.boundaryWidth);
+	printf("Goal width: %.2fm, depth: %.2fm\r\n\r\n", robot.sensors.visionGeometry.goalWidth, robot.sensors.visionGeometry.goalDepth);
 }
 
 SHELL_CMD(runtime, "Runtimes of critical tasks");
@@ -454,6 +457,97 @@ SHELL_CMD_IMPL(sensors)
 	printf("t_touch: %uus\r\n", devTouch.profiler.ioDuration_us);
 }
 
+SHELL_CMD(skill, "Skill data summary");
+
+SHELL_CMD_IMPL(skill)
+{
+	(void)pUser; (void)argc; (void)argv;
+
+	DriveInput* pDrive = &robot.skillOutput.drive;
+	DribblerInput* pDribbler = &robot.skillOutput.dribbler;
+	KickerInput* pKicker = &robot.skillOutput.kicker;
+
+	printf("Skill: %hu\r\n\r\n", (uint16_t) skills.input.skillId);
+
+	printf("### Drive Input ###\r\n");
+
+	if(pDrive->modeXY == DRIVE_MODE_WHEEL_VEL || pDrive->modeW == DRIVE_MODE_WHEEL_VEL)
+	{
+		printf("Wheels: %.2f, %.2f, %.2f, %.2f [rad/s]\r\n", pDrive->wheelVel[0], pDrive->wheelVel[1], pDrive->wheelVel[2], pDrive->wheelVel[3]);
+	}
+	else if(pDrive->modeXY == DRIVE_MODE_LOCAL_FORCE || pDrive->modeW == DRIVE_MODE_LOCAL_FORCE)
+	{
+		printf("Forces: %.2fN, %.2fN, %.2fNm\r\n", pDrive->localForce[0], pDrive->localForce[1], pDrive->localForce[2]);
+	}
+	else
+	{
+		switch(pDrive->modeXY)
+		{
+			case DRIVE_MODE_OFF:
+				printf("XY Off\r\n");
+				break;
+			case DRIVE_MODE_LOCAL_VEL:
+				printf("XY Vel: %.2f, %.2f m/s\r\n", pDrive->localVel[0], pDrive->localVel[1]);
+				break;
+			case DRIVE_MODE_GLOBAL_POS_ASYNC:
+				printf("XY Primary dir: %.2frad\r\n", pDrive->primaryDirection);
+				// FALLTHRU
+			case DRIVE_MODE_GLOBAL_POS:
+				printf("XY Pos: %.2f, %.2f m\r\n", pDrive->pos[0],  pDrive->pos[1]);
+				break;
+			default:
+				break;
+		}
+
+		switch(pDrive->modeW)
+		{
+			case DRIVE_MODE_OFF:
+				printf("W Off\r\n");
+				break;
+			case DRIVE_MODE_LOCAL_VEL:
+				printf("W Vel: %.2frad/s\r\n", pDrive->localVel[2]);
+				break;
+			case DRIVE_MODE_GLOBAL_POS_ASYNC:
+			case DRIVE_MODE_GLOBAL_POS:
+				printf("W Pos: %.2frad\r\n", pDrive->pos[2]);
+				break;
+			default:
+				break;
+		}
+	}
+
+	printf("\r\n### Drive Limits ###\r\n");
+	printf("XY Vel: %.2f, W Vel: %.2f, strict: %u\r\n", pDrive->limits.velMaxXY, pDrive->limits.velMaxW, pDrive->limits.strictVelLimit);
+	printf("XY Acc: %.2f, W Acc: %.2f\r\n\r\n", pDrive->limits.accMaxXY, pDrive->limits.accMaxW);
+
+	printf("### Dribbler ###\r\n");
+	printf("Mode: %u\r\n", pDribbler->mode);
+	printf("Speed: %.2fm/s, Max. Force: %.2fN, Voltage: %.2fV\r\n\r\n", pDribbler->velocity, pDribbler->maxForce, pDribbler->voltage);
+
+	printf("### Kicker ###\r\n");
+
+	switch(pKicker->mode)
+	{
+		case KICKER_MODE_ARM:
+			printf("Mode: Arm, %.2fm/s\r\n", pKicker->speed);
+			break;
+		case KICKER_MODE_FORCE:
+			printf("Mode: Force, %.2fm/s\r\n", pKicker->speed);
+			break;
+		case KICKER_MODE_ARM_TIME:
+			printf("Mode: Time, %.2fs\r\n", pKicker->speed);
+			break;
+		default:
+			printf("Mode: Off\r\n");
+			break;
+	}
+
+	if(pKicker->device == KICKER_DEVICE_STRAIGHT)
+		printf("Device: Straight\r\n");
+	else
+		printf("Device: Chip\r\n");
+}
+
 SHELL_CMD(configs, "List all configs");
 
 SHELL_CMD_IMPL(configs)
@@ -497,7 +591,7 @@ SHELL_CMD_IMPL(time)
 	printf("Time: %uus\r\n", SysTimeUSec());
 
 	struct tm *nowtm;
-	time_t now = SysTimeUnix();
+	time_t now = SysTimeUnix_s();
 	nowtm = localtime(&now);
 
 	char tmbuf[64];
@@ -679,6 +773,7 @@ void ShellCommandsInit()
 	ShellCmdAdd(&devShell.shell.cmdHandler, variant_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, sensors_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, state_command);
+	ShellCmdAdd(&devShell.shell.cmdHandler, skill_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, runtime_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, led_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, screenshot_command);

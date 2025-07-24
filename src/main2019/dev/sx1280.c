@@ -1,5 +1,4 @@
 #include "sx1280.h"
-#include "sx1280_def.h"
 #include "ch.h"
 
 SX1280LLD devSX1280;
@@ -23,7 +22,7 @@ CH_FAST_IRQ_HANDLER(Vector9C) // EXTI9_5
 	if(EXTI_D1->PR1 & EXTI_PR1_PR5)
 	{
 		EXTI_D1->PR1 = EXTI_PR1_PR5;
-		SX1280LLDDioIRQ(&devSX1280);
+		SX1280LLDDioIRQ(&devSX1280, SX1280LLD_DIO_1);
 	}
 }
 
@@ -32,7 +31,7 @@ void DevSX1280Init(SPILLD* pSPI, TimerSimpleLLD* pTimer1us, uint32_t irqLevelHig
 	SX1280LLDData sxDrvInit;
 	sxDrvInit.pSpi = pSPI;
 	sxDrvInit.csPin = (GPIOPin){ GPIOF, GPIO_PIN_10 };
-	sxDrvInit.prescaler = SPI_CFG1_BRDIV4;
+	sxDrvInit.prescaler = SPI_CFG1_BRDIV8;
 	sxDrvInit.busyPin = (GPIOPin){ GPIOC, GPIO_PIN_4 };
 	sxDrvInit.dioPins[0] = (GPIOPin){ GPIOC, GPIO_PIN_5 };
 	sxDrvInit.dioPins[1] = (GPIOPin){ 0, 0 };

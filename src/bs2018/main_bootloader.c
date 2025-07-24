@@ -50,8 +50,6 @@ int main()
 	SCB->VTOR = 0x00200000;
 
 	SystemInit();
-	TIM2Init();
-	SysTimeInit(&tim2);
 
 	// Enable compensation cell to reduce noise on power lines with 50MHz/100MHz I/Os
 	SYSCFG->CMPCR = SYSCFG_CMPCR_CMP_PD;
@@ -60,6 +58,8 @@ int main()
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
 
 	chSysInit();
+	TIM2Init();
+	SysTimeInit(&tim2);
 
 	// --- SYS ---
 	USART1Init(IRQL_USART1, TASK_PRIO_CLI_SERIAL);

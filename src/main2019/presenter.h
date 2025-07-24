@@ -1,7 +1,6 @@
 #pragma once
 
-#include "ch.h"
-#include "commands.h"
+#include "ext_commands.h"
 
 void PresenterInit();
 void PresenterShowWindow(int16_t newWindow);

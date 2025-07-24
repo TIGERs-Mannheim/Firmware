@@ -2,12 +2,13 @@
 
 #include "sx1280_lld.h"
 #include "drv/fem_interface.h"
+#include "radio_settings.h"
 
 // Maximum packet size over-the-air. This is fixed, do not change.
 #define RADIO_PHY_MAX_PACKET_SIZE 128
 
 // Number of trace buffer entries available for low-level driver
-#define RADIO_PHY_LLD_TRACE_BUF_SIZE 6
+#define RADIO_PHY_LLD_TRACE_BUF_SIZE 5
 
 typedef enum RadioPhyState
 {
@@ -16,12 +17,10 @@ typedef enum RadioPhyState
 	RADIO_PHY_STATE_INIT_TX,
 	RADIO_PHY_STATE_WBUF,
 	RADIO_PHY_STATE_CIRQ_TX,
-	RADIO_PHY_STATE_CDIO_TX,
 	RADIO_PHY_STATE_STX,
 	RADIO_PHY_STATE_WDIO_TX,
 
 	RADIO_PHY_STATE_CIRQ_RX,
-	RADIO_PHY_STATE_CDIO_RX,
 	RADIO_PHY_STATE_SRX,
 	RADIO_PHY_STATE_WDIO_RX,
 	RADIO_PHY_STATE_GPSR,
@@ -74,6 +73,8 @@ typedef struct _RadioPhyOp
 			uint8_t data[RADIO_PHY_MAX_PACKET_SIZE];
 			uint8_t size;
 			uint8_t useTxDelay;
+			uint8_t txPeriodBase;
+			uint16_t txPeriodCount;
 		} tx;
 
 		struct
@@ -97,17 +98,6 @@ typedef struct _RadioPhyOp
 
 typedef void(*RadioPhyOpDoneFunc)(const RadioPhyOp*, void*);
 typedef void(*RadioPhyOpPrepareNextOpFunc)(RadioPhyOp*, void*);
-
-typedef struct _RadioPhyTimeouts
-{
-	uint16_t default_us;
-	uint16_t bufferIo_us;
-	uint16_t modeChange_us;
-	uint16_t txDelay_us;
-	uint16_t rxWait_us;
-	uint16_t rxWaitLong_us;
-	uint16_t txWait_us;
-} RadioPhyTimeouts;
 
 typedef struct _RadioPhyData
 {

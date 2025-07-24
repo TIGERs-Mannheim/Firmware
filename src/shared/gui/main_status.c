@@ -1,10 +1,3 @@
-/*
- * main_status.c
- *
- *  Created on: 09.01.2019
- *      Author: AndreR
- */
-
 #include "main_status.h"
 #include "gui/bot_cover.h"
 #include "gui/styles.h"
@@ -12,7 +5,7 @@
 #include "robot/robot.h"
 #include <stdio.h>
 
-static struct _handles
+static struct
 {
 	GHandle hBotCover;
 	GHandle hDischarge;
@@ -271,35 +264,33 @@ void MainStatusKdUpdate(PresenterMainStatus* pFb)
 	}
 }
 
-void MainStatusConfigNetworkUpdate(ConfigNetwork* pCfg)
-{
-	static char buf[10];
-
-	BotCoverSetId(handles.hBotCover, pCfg->botId);
-
-	snprintf(buf, 10, "%3hu", (uint16_t)pCfg->channel);
-	gwinSetText(handles.hChannel, buf, FALSE);
-}
-
 void MainStatusWifiUpdate(PresenterWifiStat* pStat)
 {
 	static char rssi[10];
+	static char buf[10];
 
-	if(pStat->linkDisabled)
+	BotCoverSetId(handles.hBotCover, pStat->botId);
+
+	snprintf(buf, 10, "%3hu", (uint16_t)pStat->channel);
+	gwinSetText(handles.hChannel, buf, FALSE);
+
+	switch(pStat->networkMode)
 	{
-		gwinSetText(handles.hRSSI, "disabled", FALSE);
-	}
-	else
-	{
-		if(pStat->bsOnline)
-		{
+		case NETWORK_MODE_DISABLED:
+			gwinSetText(handles.hRSSI, "disabled", FALSE);
+			break;
+		case NETWORK_MODE_IDLE:
+			gwinSetText(handles.hRSSI, "idle", FALSE);
+			break;
+		case NETWORK_MODE_SCANNING:
+		case NETWORK_MODE_VALIDATE_SCAN:
+		case NETWORK_MODE_VALIDATE_CHANNEL:
+			gwinSetText(handles.hRSSI, "scanning", FALSE);
+			break;
+		case NETWORK_MODE_PAIRED:
 			snprintf(rssi, 10, "%3.2fdBm", pStat->rssi);
 			gwinSetText(handles.hRSSI, rssi, FALSE);
-		}
-		else
-		{
-			gwinSetText(handles.hRSSI, "Link lost", FALSE);
-		}
+			break;
 	}
 
 	if(pStat->sumatraOnline)

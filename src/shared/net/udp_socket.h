@@ -7,7 +7,7 @@ typedef struct _UDPSocket
 	void* pNext;
 
 	uint16_t port;
-	IPv4Address bindIp;
+	IPv4Address multicastIp;
 
 	NetIf* pIf;
 	List rxPktQueue;
@@ -17,9 +17,9 @@ typedef struct _UDPSocket
 	uint32_t rxPktLost;
 } UDPSocket;
 
-void UDPSocketOpen(UDPSocket* pSocket, NetIf* pInterface, uint16_t myPort, IPv4Address bindIp);
+void UDPSocketOpen(UDPSocket* pSocket, NetIf* pInterface, uint16_t myPort);
 void UDPSocketClose(UDPSocket* pSocket);
-void UDPSocketSetBindIp(UDPSocket* pSocket, IPv4Address ip);
+void UDPSocketSetMulticastGroup(UDPSocket* pSocket, IPv4Address multicastIp);
 NetPkt* UDPSocketAlloc(UDPSocket* pSocket, IPv4Address dstIp, uint16_t dstPort);
 int16_t UDPSocketSend(UDPSocket* pSocket, NetPkt* pPkt);
 NetPkt* UDPSocketReceive(UDPSocket* pSocket);

@@ -2,6 +2,7 @@
 #include "dev/sky_fem.h"
 #include "dev/sx1280.h"
 #include "sys/eth0.h"
+#include "sys/rtc.h"
 #include "module/radio/radio_settings.h"
 #include "sx1280_def.h"
 #include "constants.h"
@@ -16,6 +17,7 @@ static void handlePacket(NetPkt* pPkt);
 BaseStation baseStation = {
 	.config = {
 		.base = {
+			.isDHCPEnabled = 1,
 			.ip.u8 = { 192, 168, 1, 210 },
 			.port = 10201,
 		},
@@ -35,13 +37,27 @@ CH_IRQ_HANDLER(Vector1C4) // SPDIFRX, used as low prio IRQ to get back to OS-lev
 
 void BaseStationInit()
 {
-	FlashFSOpenOrCreate("base/cfg", 0, &baseStation.config, sizeof(BaseStationConfig), &baseStation.pCfgFile);
+	FlashFSOpenOrCreate("base/cfg", 1, &baseStation.config, sizeof(BaseStationConfig), &baseStation.pCfgFile);
+
+	const InventoryEntry* pInventory = InventoryGetEntry();
 
 	// ### Network ###
 	NetIfData netInit;
-	memcpy(&netInit.mac, &InventoryGetEthernet()->mac, sizeof(MAC));
-	netInit.ip = baseStation.config.base.ip;
+	netInit.staticIp = baseStation.config.base.ip;
 	netInit.pEth = &eth0;
+	netInit.ipConfigType = baseStation.config.base.isDHCPEnabled ? NET_IF_IP_CONFIG_TYPE_DHCP : NET_IF_IP_CONFIG_TYPE_STATIC;
+	netInit.pHostname = baseStation.hostname;
+
+	if(pInventory)
+	{
+		snprintf(baseStation.hostname, sizeof(baseStation.hostname), "tigerbase%u", pInventory->hwId);
+		netInit.mac = pInventory->ethernet.mac;
+	}
+	else
+	{
+		snprintf(baseStation.hostname, sizeof(baseStation.hostname), "tigerbaseXXX");
+		netInit.mac = MAC_ZEROS;
+	}
 
 	NetIfInit(&baseStation.networkInterface, &netInit, TASK_PRIO_NET_IF);
 
@@ -94,17 +110,24 @@ void BaseStationInit()
 	RadioBaseSetMode(&baseStation.radioBase, RADIO_MODE_ACTIVE);
 
 	// ### Base Station Processing ###
-	UDPSocketOpen(&baseStation.socket, &baseStation.networkInterface, baseStation.config.base.port, baseStation.networkInterface.data.ip);
+	UDPSocketOpen(&baseStation.socket, &baseStation.networkInterface, baseStation.config.base.port);
 
 	baseStation.pTask = chThdCreateStatic(baseStation.waTask, sizeof(baseStation.waTask), TASK_PRIO_BASE_STATION, &baseStationTask, 0);
 }
 
-void BaseStationSetIp(IPv4Address ip)
+void BaseStationSetStaticIp(IPv4Address ip)
 {
-	baseStation.config.base.ip = ip;
-	UDPSocketSetBindIp(&baseStation.socket, ip);
-	NetIfSetIp(&baseStation.networkInterface, ip);
+	NetIfSetStaticIp(&baseStation.networkInterface, ip);
 
+	baseStation.config.base.ip = ip;
+	FlashFSWrite(&baseStation.pCfgFile, &baseStation.config, sizeof(baseStation.config));
+}
+
+void BaseStationEnableDhcp(uint8_t enable)
+{
+	NetIfSetIpConfigType(&baseStation.networkInterface, enable ? NET_IF_IP_CONFIG_TYPE_DHCP : NET_IF_IP_CONFIG_TYPE_STATIC);
+
+	baseStation.config.base.isDHCPEnabled = enable;
 	FlashFSWrite(&baseStation.pCfgFile, &baseStation.config, sizeof(baseStation.config));
 }
 
@@ -119,7 +142,7 @@ void BaseStationSetPort(uint16_t port)
 void BaseStationSetVisionIp(IPv4Address ip)
 {
 	baseStation.config.vision.ip = ip;
-	UDPSocketSetBindIp(&baseStation.vision.socket, ip);
+	UDPSocketSetMulticastGroup(&baseStation.vision.socket, ip);
 
 	FlashFSWrite(&baseStation.pCfgFile, &baseStation.config, sizeof(baseStation.config));
 }
@@ -170,7 +193,6 @@ static void baseStationTask(void*)
 
 			// construct header
 			PacketHeader header;
-			header.section = SECTION_BASE_STATION;
 			header.cmd = CMD_BASE_STATION_ETH_STATS;
 
 			// Gather ETH stats
@@ -182,7 +204,7 @@ static void baseStationTask(void*)
 			bsEthStats.txFrames = ethStats.txFramesProcessed;
 			bsEthStats.txBytes = ethStats.txBytesProcessed;
 			bsEthStats.rxFramesDmaOverrun = ethStats.rxMissedCtrl;
-			bsEthStats.ntpSync = 0; // TODO: re-implement SNTP
+			bsEthStats.ntpSync = 0; // TODO: delete, time comes from Sumatra
 
 			BaseStationSendSumatraPacket(&header, &bsEthStats, sizeof(BaseStationEthStats));
 
@@ -257,12 +279,6 @@ static void handlePacket(NetPkt* pPkt)
 		return;
 	}
 
-	if(pHeader->section != SECTION_BASE_STATION)
-	{
-		baseStation.stats.rxInvalid++;
-		return;
-	}
-
 	// The following commands are always processed, independent of source
 	switch(pHeader->cmd)
 	{
@@ -279,7 +295,7 @@ static void handlePacket(NetPkt* pPkt)
 			{
 				if(ArpCacheLookup(&baseStation.networkInterface.arp, pPkt->ipv4.src) == 0)
 				{
-					ArpSend(&baseStation.networkInterface.arp, ARP_OPERATION_REQUEST, MACSet(255, 255, 255, 255, 255, 255), pPkt->ipv4.src);
+					ArpSend(&baseStation.networkInterface.arp, ARP_OPERATION_REQUEST, MAC_BROADCAST, pPkt->ipv4.src);
 				}
 
 				baseStation.sumatra.ip = pPkt->ipv4.src;
@@ -300,6 +316,8 @@ static void handlePacket(NetPkt* pPkt)
 		{
 			BaseStationSendSumatraPacket(pHeader, NetBufGetHead(&pPkt->buf), NetBufGetSizeUsed(&pPkt->buf));
 		}
+		break;
+		default:
 		break;
 	}
 
@@ -361,6 +379,22 @@ static void handlePacket(NetPkt* pPkt)
 
 			RouterSendBotData(pCmd->id, NetBufGetHead(&pPkt->buf), NetBufGetSizeUsed(&pPkt->buf));
 		}
+		break;
+		case CMD_BASE_STATION_BROADCAST:
+		{
+			BaseStationBroadcast* pCmd = NetBufPull(&pPkt->buf, sizeof(BaseStationBroadcast));
+			if(pCmd)
+			{
+				chMtxLock(&router.broadcast.sumatraMtx);
+				memcpy(&router.broadcast.sumatraData, pCmd, sizeof(BaseStationBroadcast));
+				chMtxUnlock(&router.broadcast.sumatraMtx);
+
+				if(pCmd->unixTime)
+					RTCSetUnixTimestamp(pCmd->unixTime);
+			}
+		}
+		break;
+		default:
 		break;
 	}
 

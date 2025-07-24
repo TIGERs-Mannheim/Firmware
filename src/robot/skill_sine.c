@@ -25,7 +25,7 @@ static void sineInit(const SkillInput* pInput)
 {
 	(void)pInput;
 
-	sine.tStart = SysTime();
+	sine.tStart = SysTimeUSec()*1e-6f;
 }
 
 static void sineRun(const SkillInput* pInput, SkillOutput* pOutput)
@@ -34,7 +34,7 @@ static void sineRun(const SkillInput* pInput, SkillOutput* pOutput)
 
 	float freq = pSine->freq*0.001f;
 
-	float tNow = SysTime()-sine.tStart;
+	float tNow = SysTimeUSec()*1e-6f - sine.tStart;
 
 	float val = arm_sin_f32(2.0f*M_PI*tNow*freq);
 	float valC = arm_cos_f32(2.0f*M_PI*tNow*freq);

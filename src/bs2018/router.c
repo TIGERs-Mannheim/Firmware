@@ -6,6 +6,9 @@
 #include "errors.h"
 #include "gui/robot_status.h"
 #include "robot/skill_basics.h"
+#include "misc/inventory.h"
+
+#include <sys/rtc.h>
 
 #define EVENT_MASK_TX_PREPARE_BOT		EVENT_MASK(0)
 #define EVENT_MASK_TX_PREPARE_BROADCAST	EVENT_MASK(1)
@@ -27,11 +30,21 @@ void RouterInit()
 		chMtxObjectInit(&router.bots[i].matchCtrlMtx);
 
 		PacketHeader* pHeader = (PacketHeader*)router.bots[i].matchCtrlData;
-		pHeader->section = SECTION_SYSTEM;
 		pHeader->cmd = CMD_SYSTEM_MATCH_CTRL;
 
 		router.bots[i].pMatchCtrl = (SystemMatchCtrl*)(router.bots[i].matchCtrlData + sizeof(PacketHeader));
 	}
+
+	chMtxObjectInit(&router.broadcast.sumatraMtx);
+	PacketHeader* pHeader = (PacketHeader*)router.broadcast.broadcastData;
+	pHeader->cmd = CMD_BASE_STATION_BROADCAST;
+	router.broadcast.pBroadcastCmd = (BaseStationBroadcast*)(router.broadcast.broadcastData + sizeof(PacketHeader));
+
+	const InventoryEntry* pInventory = InventoryGetEntry();
+	if(pInventory)
+		router.broadcast.baseStationId = pInventory->hwId & 0xFF;
+	else
+		router.broadcast.baseStationId = 0xFF;
 
 	router.pRxTask = chThdCreateStatic(router.waRxTask, sizeof(router.waRxTask), TASK_PRIO_ROUTER_RX, &routerRxTask, 0);
 	router.pTxPrepareTask = chThdCreateStatic(router.waTxPrepareTask, sizeof(router.waTxPrepareTask), TASK_PRIO_ROUTER_TX, &routerTxPrepareTask, 0);
@@ -42,7 +55,7 @@ int16_t RouterSendBotData(uint8_t botId, const uint8_t* pCmdData, uint16_t dataL
 	if(botId > RADIO_NUM_ROBOT_CLIENTS)
 		return ERROR_INVALID_PARAMETER;
 
-	RouterClient* pBot = &router.bots[botId];
+	RouterClientBot* pBot = &router.bots[botId];
 	RadioClientRx* pRadioClient = &baseStation.radioBase.baseIn[botId];
 
 	if(!pRadioClient->isOnline)
@@ -54,7 +67,7 @@ int16_t RouterSendBotData(uint8_t botId, const uint8_t* pCmdData, uint16_t dataL
 	const PacketHeader* pHeader = (const PacketHeader*)pCmdData;
 
 	// intercept match ctrl commands
-	if(pHeader->section == SECTION_SYSTEM && pHeader->cmd == CMD_SYSTEM_MATCH_CTRL)
+	if(pHeader->cmd == CMD_SYSTEM_MATCH_CTRL)
 	{
 		const uint8_t* pData = pCmdData + sizeof(PacketHeader);
 		uint16_t cmdLength = dataLength - sizeof(PacketHeader);
@@ -150,7 +163,7 @@ static void velModeBasicEntrys(VelInput* pVel)
 
 static void prepareBotTxData(uint8_t dstId)
 {
-	RouterClient* pBot = &router.bots[dstId];
+	RouterClientBot* pBot = &router.bots[dstId];
 	SystemMatchCtrl* pCtrl = pBot->pMatchCtrl;
 	SslVisionObject* pVisionObj = &baseStation.vision.robots[dstId];
 
@@ -160,10 +173,7 @@ static void prepareBotTxData(uint8_t dstId)
 	{
 		ctrlInputAvailable = 1;
 
-		if(RobotStatusIsChargeKicker())
-			pCtrl->flags = SYSTEM_MATCH_CTRL_FLAGS_KICKER_AUTOCHG;
-		else
-			pCtrl->flags = 0;
+		pCtrl->flags = SYSTEM_MATCH_CTRL_FLAGS_LED_RED << 5;
 
 		VelInput* pVel = (VelInput*)pCtrl->skillData;
 		pBot->matchCtrlSize = sizeof(SystemMatchCtrl) - SYSTEM_MATCH_CTRL_USER_DATA_SIZE;
@@ -179,6 +189,8 @@ static void prepareBotTxData(uint8_t dstId)
 				pCtrl->skillId = 2;
 				pBot->matchCtrlSize += sizeof(VelInput);
 				velModeBasicEntrys(pVel);
+				break;
+			default:
 				break;
 		}
 
@@ -207,9 +219,9 @@ static void prepareBotTxData(uint8_t dstId)
 		{
 			pBot->tLastVisionCapture_us = pVisionObj->tCapture_us;
 
-			pCtrl->curPosition[0] = pVisionObj->position_m[0] * 1000.0f + 0.5f;
-			pCtrl->curPosition[1] = pVisionObj->position_m[1] * 1000.0f + 0.5f;
-			pCtrl->curPosition[2] = pVisionObj->orientation_rad * 1000.0f + 0.5f;
+			pCtrl->curPosition[0] = lroundf(pVisionObj->position_m[0] * 1000.0f);
+			pCtrl->curPosition[1] = lroundf(pVisionObj->position_m[1] * 1000.0f);
+			pCtrl->curPosition[2] = lroundf(pVisionObj->orientation_rad * 1000.0f);
 			pCtrl->camId = pVisionObj->camIdOfLastDetection;
 
 			uint32_t delay = (SysTimeUSec() - pVisionObj->tCapture_us)/250;
@@ -229,9 +241,6 @@ static void prepareBotTxData(uint8_t dstId)
 
 		chMtxUnlock(&pVisionObj->accessMtx);
 
-		if(!baseStation.vision.isOnline)
-			pCtrl->camId |= SYSTEM_MATCH_CTRL_CAM_ID_FLAG_NO_VISION;
-
 		RadioBaseSendPacket(&baseStation.radioBase, dstId, pBot->matchCtrlData, pBot->matchCtrlSize + sizeof(PacketHeader));
 
 		chMtxUnlock(&pBot->matchCtrlMtx);
@@ -240,8 +249,85 @@ static void prepareBotTxData(uint8_t dstId)
 
 static void prepareBroadcastData()
 {
-	// TODO: Could send timesync here
-	// TODO: Could send field geometry here
+	RouterBroadcast* pBc = &router.broadcast;
+	BaseStationBroadcast* pCmd = pBc->pBroadcastCmd;
+	SslVisionGeometry* pGeom = &baseStation.vision.geometry;
+	SslVisionObject* pBall = &baseStation.vision.ball;
+
+	chMtxLock(&pBc->sumatraMtx);
+	memcpy(pCmd, &pBc->sumatraData, sizeof(BaseStationBroadcast));
+	chMtxUnlock(&pBc->sumatraMtx);
+
+	pCmd->baseStationId = pBc->baseStationId;
+
+	if(pCmd->unixTime == 0)
+		pCmd->unixTime = RTCGetUnixTimestamp();
+
+	if(robotStatus.manualControlOn)
+	{
+		pCmd->allocatedBotIds |= (1 << robotStatus.selectedBotId);
+
+		if(RobotStatusIsChargeKicker())
+			pCmd->flags |= BASE_STATION_BROADCAST_FLAG_KICKER_AUTOCHG;
+	}
+
+	if(!baseStation.vision.isOnline)
+		pCmd->flags |= BASE_STATION_BROADCAST_FLAG_NO_VISION;
+
+	chMtxLock(&pBall->accessMtx);
+
+	if(pBc->tLastBallVisionCapture_us != pBall->tCapture_us)
+	{
+		pBc->tLastBallVisionCapture_us = pBall->tCapture_us;
+
+		pCmd->ballPosition[0] = lroundf(pBall->position_m[0] * 1000.0f);
+		pCmd->ballPosition[1] = lroundf(pBall->position_m[1] * 1000.0f);
+		pCmd->ballCamId = pBall->camIdOfLastDetection;
+
+		uint32_t delay = (SysTimeUSec() - pBall->tCapture_us)/250;
+		if(delay > 255)
+			delay = 255;
+
+		pCmd->ballPosDelay = delay;
+	}
+	else
+	{
+		pCmd->ballPosition[0] = BASE_STATION_BROADCAST_UNUSED_FIELD;
+		pCmd->ballPosition[1] = BASE_STATION_BROADCAST_UNUSED_FIELD;
+		pCmd->ballCamId = 0;
+		pCmd->ballPosDelay = 255;
+	}
+
+	chMtxUnlock(&pBall->accessMtx);
+
+	chMtxLock(&pGeom->accessMtx);
+
+	if(pGeom->isValid)
+	{
+		int32_t fieldSize_cm[2];
+		fieldSize_cm[0] = lroundf(pGeom->fieldLength_m * 100.0f);
+		fieldSize_cm[1] = lroundf(pGeom->fieldWidth_m * 100.0f);
+		int32_t fieldSize = fieldSize_cm[0] | fieldSize_cm[1] << 12;
+		pCmd->fieldSize[0] = fieldSize & 0xFF;
+		pCmd->fieldSize[1] = (fieldSize >> 8) & 0xFF;
+		pCmd->fieldSize[2] = (fieldSize >> 16) & 0xFF;
+		pCmd->boundaryWidth = lroundf(pGeom->boundaryWidth_m * 100.0f);
+		pCmd->goalWidth = lroundf(pGeom->goalWidth_m * 100.0f);
+		pCmd->goalDepth = lroundf(pGeom->goalDepth_m * 100.0f);
+	}
+	else
+	{
+		pCmd->fieldSize[0] = 0;
+		pCmd->fieldSize[1] = 0;
+		pCmd->fieldSize[2] = 0;
+		pCmd->boundaryWidth = 0;
+		pCmd->goalWidth = 0;
+		pCmd->goalDepth = 0;
+	}
+
+	chMtxUnlock(&pGeom->accessMtx);
+
+	RadioBaseSendPacket(&baseStation.radioBase, CMD_BOT_BROADCAST_ID, pBc->broadcastData, sizeof(pBc->broadcastData));
 }
 
 static int16_t handleBotRxData(uint8_t srcId)
@@ -253,7 +339,7 @@ static int16_t handleBotRxData(uint8_t srcId)
 
 	// intercept and save robot feedback
 	PacketHeader* pHeader = (PacketHeader*)(router.rxProcBuf+sizeof(BaseStationACommand));
-	if(pHeader->section == SECTION_SYSTEM && pHeader->cmd == CMD_SYSTEM_MATCH_FEEDBACK && pktSize >= (sizeof(PacketHeader)+sizeof(SystemMatchFeedback)))
+	if(pHeader->cmd == CMD_SYSTEM_MATCH_FEEDBACK && pktSize >= (sizeof(PacketHeader)+sizeof(SystemMatchFeedback)))
 	{
 		SystemMatchFeedback* pFeedback = (SystemMatchFeedback*)&router.rxProcBuf[sizeof(BaseStationACommand)+sizeof(PacketHeader)];
 		memcpy(&router.bots[srcId].lastMatchFeedback, pFeedback, sizeof(SystemMatchFeedback));
@@ -264,7 +350,6 @@ static int16_t handleBotRxData(uint8_t srcId)
 
 	// construct header
 	PacketHeader header;
-	header.section = SECTION_BASE_STATION;
 	header.cmd = CMD_BASE_STATION_ACOMMAND;
 
 	// construct BaseStationACommand

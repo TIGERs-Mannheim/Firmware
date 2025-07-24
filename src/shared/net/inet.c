@@ -75,6 +75,11 @@ uint8_t IPv4IsMulticastAddress(IPv4Address addr)
 	return addr.u8[0] >= 224 && addr.u8[0] <= 239;
 }
 
+uint8_t IPv4IsLimitedBroadcastAddress(IPv4Address addr)
+{
+	return addr.u32 == 0xffffffff;
+}
+
 IPv4Address IPv4AddressSet(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 {
 	IPv4Address ad;

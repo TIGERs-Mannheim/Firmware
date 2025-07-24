@@ -93,7 +93,7 @@ add_link_options(
 )
 
 # Normal run/application code
-add_executable(${RUN_EXEC}
+add_executable(${RUN_EXEC} EXCLUDE_FROM_ALL
     ${bs2018_SOURCES}
 )
 
@@ -111,7 +111,7 @@ target_link_options(${RUN_EXEC} PRIVATE
 )
 
 # Bootloader code
-add_executable(${BOOT_EXEC}
+add_executable(${BOOT_EXEC} EXCLUDE_FROM_ALL
     main_bootloader.c
     system.c
     

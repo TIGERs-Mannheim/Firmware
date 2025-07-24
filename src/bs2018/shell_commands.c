@@ -1,12 +1,10 @@
 #include "shell_commands.h"
 #include "dev/shell.h"
 #include "dev/touch.h"
-#include "dev/sx1280.h"
 #include "sys/eth0.h"
 #include "sys/rtc.h"
 #include "util/cpu_load.h"
 #include "util/log.h"
-#include "util/config.h"
 #include "hal/sys_time.h"
 #include "misc/inventory.h"
 #include "presenter.h"
@@ -52,6 +50,8 @@ SHELL_CMD_IMPL(stats)
 	printf("RX: %u good, %u invalid, %u unauthorized, %u auth failures\r\n",
 			baseStation.stats.rxGood, baseStation.stats.rxInvalid, baseStation.stats.rxUnauthorized, baseStation.stats.rxAuthFailed);
 	printf("TX: %u good, %u failed\r\n", baseStation.stats.txGood, baseStation.stats.txFailed);
+
+	printf("Allocated bot IDs: 0x%08X\r\n", router.broadcast.sumatraData.allocatedBotIds);
 }
 
 SHELL_CMD(config, "Show configuration");
@@ -60,11 +60,17 @@ SHELL_CMD_IMPL(config)
 {
 	(void)pUser; (void)argc; (void)argv;
 
-	printf("Base IP:   %s:%hu\r\n", IPv4FormatAddress(baseStation.config.base.ip), baseStation.config.base.port);
+	printf("Base IP:   %s:%hu", IPv4FormatAddress(baseStation.networkInterface.ip), baseStation.config.base.port);
+
+	if(baseStation.config.base.isDHCPEnabled)
+		printf(" (from DHCP)\r\n");
+	else
+		printf(" (static)\r\n");
+
 	printf("Vision IP: %s:%hu\r\n", IPv4FormatAddress(baseStation.config.vision.ip), baseStation.config.vision.port);
 }
 
-SHELL_CMD(base_ip, "Set base station IP",
+SHELL_CMD(base_ip, "Set base station static IP",
 	SHELL_ARG(ip, "New IP to use")
 );
 
@@ -81,7 +87,31 @@ SHELL_CMD_IMPL(base_ip)
 
 	printf("New IP: %s\r\n", IPv4FormatAddress(ip));
 
-	BaseStationSetIp(ip);
+	if(baseStation.config.base.isDHCPEnabled)
+		printf("DHCP is enabled, static IP will not be used until DHCP is disabled.\r\n");
+
+	BaseStationSetStaticIp(ip);
+}
+
+SHELL_CMD(base_dhcp, "Enable/Disable DHCP",
+	SHELL_ARG(enable, "1=enable,0=disable")
+);
+
+SHELL_CMD_IMPL(base_dhcp)
+{
+	(void)pUser; (void)argc;
+
+	int enable = atoi(argv[1]);
+	if(enable)
+	{
+		BaseStationEnableDhcp(1);
+		printf("DHCP enabled\r\n");
+	}
+	else
+	{
+		BaseStationEnableDhcp(0);
+		printf("DHCP disabled\r\n");
+	}
 }
 
 SHELL_CMD(base_port, "Set base station UDP port",
@@ -148,6 +178,20 @@ SHELL_CMD_IMPL(vision_port)
 	printf("New port: %d\r\n", port);
 
 	BaseStationSetVisionPort(port);
+}
+
+SHELL_CMD(alloc, "Allocate robots to this base station",
+	SHELL_ARG(id, "Hex mask of robots to acquire")
+);
+
+SHELL_CMD_IMPL(alloc)
+{
+	(void)pUser; (void)argc;
+
+	uint32_t mask = strtoul(argv[1], NULL, 16);
+	router.broadcast.sumatraData.allocatedBotIds = mask;
+
+	printf("Allocated bot IDs: 0x%08X\r\n", router.broadcast.sumatraData.allocatedBotIds);
 }
 
 SHELL_CMD(net, "Network subsystem commands",
@@ -274,15 +318,21 @@ SHELL_CMD_IMPL(time)
 {
 	(void)pUser; (void)argc; (void)argv;
 
-	printf("Time: %uus\r\n", SysTimeUSec());
+	printf("SysTimeUSec: %uus\r\n", SysTimeUSec());
+	printf("SysTimeMonotonic_s: %us\r\n", SysTimeMonotonic_s());
 
-	struct tm *nowtm;
+	struct tm* nowtm;
+	char tmbuf[64];
+
 	time_t now = RTCGetUnixTimestamp();
 	nowtm = localtime(&now);
-
-	char tmbuf[64];
 	strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
-	printf("%s\r\n", tmbuf);
+	printf("RTC: %s (UTC)\r\n", tmbuf);
+
+	now = SysTimeUnix_s();
+	nowtm = localtime(&now);
+	strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+	printf("SysTimeUnix: %s (UTC)\r\n", tmbuf);
 }
 
 SHELL_CMD(touch_calib, "Reset touch screen calibration");
@@ -336,9 +386,11 @@ void ShellCommandsInit()
 	ShellCmdAdd(&devShell.shell.cmdHandler, stats_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, config_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, base_ip_command);
+	ShellCmdAdd(&devShell.shell.cmdHandler, base_dhcp_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, base_port_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, vision_ip_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, vision_port_command);
+	ShellCmdAdd(&devShell.shell.cmdHandler, alloc_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, net_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, vision_command);
 	ShellCmdAdd(&devShell.shell.cmdHandler, radio_command);

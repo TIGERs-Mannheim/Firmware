@@ -4,12 +4,11 @@
 
 == Project structure
 
-This project contains code for TIGERs robots generation v2016 and v2019 and for the base station v2018.
+This project contains code for TIGERs robots generation v2020 and for the base station v2018.
 
 Hardware maps to Eclipse projects as follows:
 
 * Robot v2020: main2019, motor2019, ir2019
-* Robot v2016: main2016
 * Base station v2018: bs2018
 
 v2020 robots have two sub-processor types. One for the front infrared barrier and array, contained in ir2019 project 
@@ -19,24 +18,25 @@ A brief overview of the folder structure under Firmware:
 
 * src: application code
 ** bs2018: base station v2018
-** ir2019: infrared barrier and array of v2020 robots
-** main2016: main processor code v2016 robots
 ** main2019: main processor code v2020 robots
+** ir2019: infrared barrier and array of v2020 robots
 ** motor2019: individual motor controller code v2020 robots
-** libs: shared code, used by multiple applications
-*** chibios: ChibiOS operating system files, used by v2016, v2020, bs2018
+** libs: third-party libraries (non-TIGERs code), used by multiple applications
+*** chibios: ChibiOS operating system files, used by main2019 and bs2018
 *** cmsis_core: Common Microcontroller Software Interface Standard files
-*** common: shared code of all microcontrollers
 *** dsp: external CMSIS DSP library, contains optimized matrix operations
 *** fatfs: Elm Chan's FAT file system library
-*** gui: shared GUI elements
-*** robot: *Primary robot control code*
 *** ugfx: uGFX graphics library used for touch screens
-*** usb: USB client and host drivers
-*** util: Utility functions, algorithms, drivers
-*** f0xx: STM32F0 shared code
-*** f7xx: STM32F7 shared code
-*** h7xx: STM32H7 shared code
+** robot: *Primary robot control code* (control, sensor fusion, skills)
+** shared: common code used by multiple applications
+*** drv: drivers for specific (MCU-)external devices
+*** gui: shared GUI elements
+*** hal: Hardware Abstraction Layer (abstraction of MCU-internal components)
+*** math: Algorithms e.g. for filters, control, trajectories
+*** module: Larger software components build on top of drivers
+*** net: UDP/IP network stack
+*** protobuf-c: Generated protobuf message files
+*** util: Utility functions and structures, not math-related
 * cmake: CMake files
 * deploy: boiler plate files for deploy CI pipeline
 * doc: documentation folder
@@ -90,57 +90,98 @@ PuTTy is a good choice for Linux and Windows.
 Under Linux use e.g. ttyUSB0 to connect.
 Under Windows use e.g. COM1 to connect.
 Actual ports to use can also vary slightly.
+
 Connection settings are a baudrate of 921600, 8 data bits, 1 stop bit, no parity (8N1).
 
 === First command
 Type `version` at the open terminal window and hit enter.
 If everything works, the robot will greet you with its firmware version number.
 
+=== Get some help
+The CLI has a built-in help system. Type `help` to list all available commands briefly.
+
+Some commands accept arguments, you can use help to list them, e.g. `help led`.
+
+Some commands are targeting a specific robot subsystem, e.g. `net`.
+Subsystems require further arguments, you may list subsystem commands with `net help`. 
+Note that help is now the second word, as it is forwarded to a subsystem. 
+To get details of a subsystem command use e.g. `net help config`.
+
 === Add a new command
-* Open the `cli.c` file for your robot (src/main2019/cli.c).   
-* Scroll down to the `processCommand()` function
-* Add your own command there with
+* Open the `shell_commands.c` file for your robot (src/main2019/shell_commands.c).
+* Scroll down to the `ShellCommandsInit()` function
+* Add your own command above this function with
 +
 [source,C,linenums]
 ----
-if(ConsoleCmpCmd("explode"))
+SHELL_CMD(explode, "Make the robot go BOOM!");
+
+SHELL_CMD_IMPL(explode)
 {
-  ConsolePrint("BUMM!\r\n");
+	(void)pUser; (void)argc; (void)argv;
+
+	printf("BOOM!\r\n");
 }
 ----
 +
+* `SHELL_CMD` and `SHELL_CMD_IMPL` are macros doing some magic behind the scenes. The first
+  describes your command (and potential arguments), the second defines the actual implementation.
+* To make your command available you have to add it to the top-level shell command handler with.
+  Go to the `ShellCommandsInit()` function and insert a line with
++
+[source,C,linenums]
+----
+ShellCmdAdd(&devShell.shell.cmdHandler, explode_command);
+----
++
+* Note that `SHELL_CMD` automatically create a function with your command name extended with `_command`.
 
-You have just met another important function, `ConsolePrint`.
+In your command handler you have just met another important function, `printf`.
 It outputs data on the console interface. Note that you manually have to add carriage return ('\r') and new line ('\n').
 
-Now select in the top menu Run => Run Configurations.. => Flash MB 2019 (Run) and click on Run.
+Now select in the top menu Run => Run Configurations.. => Flash MB 2019 (Release) and click on Run.
 Alternatively, select the little arrow next the the green button with the play triangle and select the run configuration.
 This will automatically trigger a build and flash the code to the robot.
 
-Now enter `explode` into the console window see what happens.
+Now enter `explode` into the console window and see what happens.
+
+Note that your command was automatically added to `help` and `help explode` shows your command desription.
 
 === Parse command arguments
 Add another command:
+
 [source,C,linenums]
 ----
-int16_t i16;
-if(ConsoleScanCmd("pin %hd", &i16) == 1)
+SHELL_CMD(pin, "Request PIN number from user",
+	SHELL_ARG(number, "A very secret number")
+);
+
+SHELL_CMD_IMPL(pin)
 {
-  ConsolePrint("You entered PIN: %hd\r\n", i16);
+	(void)pUser; (void)argc;
+
+	int pin = atoi(argv[1]);
+	
+	printf("You entered PIN: %d\r\n", pin);
 }
 ----
 
-If you want to input parameters a simple command compare is not enough.
-You have to use ConsoleScanCmd which uses scanf style input. Note two things:
+Remember to add the new `pin_command` to the `ShellCommandsInit()` function.
 
-* The variable placeholder is 'hd', for a 'half'-sized (i.e. 16bit) datatype which is signed ('d').
-  Be extremely careful to select the correct placeholder for your argument type of things may go really wrong.
-* `ConsoleScanCmd` returns a value which is equal to the number of parsed variables.
-  Always make sure to check the return value for the number of variables you expect.
-  
-TIP: Use `ConsoleScanCmd` and `ConsoleCmpCmd` only in cli.c. It does not work anywhere else!
+This command has one argument. Arguments are provided to the command implementation
+via the `argc` (argument count) and `argv` (argument values) variables.
 
-WARNING: `ConsolePrint` requires a large thread stack and is extremely slow. Do not use for high-frequency output.
+Note:
+ * All argument variables are passed as strings!
+ * The first argument is always the command name (hence, `argc` is always at least 1)
+ * All arguments listed in `SHELL_CMD` are mandatory. If you do not supply enough arguments for a command you will receive an error message.
+ * You may provide more arguments if the command is able to handle it, this is optional.
+ * The shell command handler internally checks if all mandatory arguments are provided. Consequently, you rarely need to check the `argc` variable.
+ * `pUser` is only intended for advanced use cases.
+
+In the sample code, the argument that you provided is converted to an integer via `atoi` and then printed out. For floating point numbers you will need `atof`.
+
+WARNING: `printf` requires a large thread stack and is extremely slow. Do not use it for high-frequency output.
 
 == Task 2 - Understand bot skills
 Sorry, this chapter is a bit theoretic but super duper important!
@@ -154,7 +195,7 @@ Each skill has:
 * A `run` function, executed at 1000Hz.
 * Optionally an init and exit function, called once upon starting or stopping the skill.
 
-Go to `src/libs/robot` and have a look at `skill_sine.h` and `skill_sine.c` for a good and simple example.
+Go to `src/robot` and have a look at `skill_sine.h` and `skill_sine.c` for a good and simple example.
 Go through the code and try to locate the above mentioned points. Can you find out what this skill does?
 
 === Input data
@@ -198,7 +239,7 @@ The skill output contains:
 * Kicker control data. Allows to arm/disarm the kicker, select the kick device and kick speed.
 
 == Task 3 - Run a simple bot skill
-Have a look at `skill_kick_ball.h` and `skill_kick_ball.c` in `src/libs/robot`.
+Have a look at `skill_kick_ball.h` and `skill_kick_ball.c` in `src/robot`.
 This skill is planned to kick the ball to a target position.
 So far it only slowly turns counter-clockwise in place when started.
 

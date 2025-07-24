@@ -1,10 +1,13 @@
 list(APPEND net_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/arp.c
+    ${CMAKE_CURRENT_LIST_DIR}/dhcp.c
+    ${CMAKE_CURRENT_LIST_DIR}/dns.c
     ${CMAKE_CURRENT_LIST_DIR}/ethernet.c
     ${CMAKE_CURRENT_LIST_DIR}/inet.c
     ${CMAKE_CURRENT_LIST_DIR}/icmp.c
     ${CMAKE_CURRENT_LIST_DIR}/igmp.c
     ${CMAKE_CURRENT_LIST_DIR}/ipv4.c
+    ${CMAKE_CURRENT_LIST_DIR}/mdns.c
     ${CMAKE_CURRENT_LIST_DIR}/net_buf.c
     ${CMAKE_CURRENT_LIST_DIR}/net_if.c
     ${CMAKE_CURRENT_LIST_DIR}/net_proto.c

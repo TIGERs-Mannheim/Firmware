@@ -1,39 +1,3 @@
-/*
- * PHY Statemachine Chart
- *
-┌──►START
-│     │ GetOp():NEXT
-│     │
-│     ├─────────────────────┬────────────────────┬─────────┬────────┐
-│     │ [TX]                │ [RX]               │ [MOD]   │ [CFG]  │ [IDLE]   Guards:
-│     │                     │ ->CIRQ             │ ->RREG  │ ->CFG  │ ->IDLE   RX:  Receive Operation
-│     ├───────────┐         │                    │         │        │          TX:  Transmit Operation
-│     │ [DELAY]   │ [else]  │                  WAIT_RREG   │        │          CFG: Set Configuration
-│     │ ->IDLE    │         ▼                    │ ->WREG  │        │          MOD: Modify Register (RMW)
-│     ▼           │       WAIT_CIRQRX            │         │        │          TO:  Timeout
-│   INIT_TX◄──────┘         │ ->CDIO             │         │        │
-│     │ ->WBUF              ▼                    │         │        │          Actions:
-│     ▼                   WAIT_CDIORX            │         │        │          ->RREG: Read register
-│   WAIT_WBUF               │ ->SRX              │         │        │          ->WREG: Write register
-│     │ ->CIRQ              ▼                    │         │        │          ->CFG:  Send custom low-level command
-│     ▼                   WAIT_SRX               │         │        │          ->WBUF: Write buffer
-│   WAIT_CIRQTX             │ ->WDIO             │         │        │          ->CIRQ: Clear IRQ on SX1280
-│     │ ->CDIO              ▼                    │         │        │          ->CDIO: Clear Digital IO (IRQ) on host
-│     ▼                   WAIT_WDIORX──┐         │         │        │          ->STX:  Start transmitting
-│   WAIT_CDIOTX             │ [TO=0]   │ [TO=1]  │         │        │          ->WDIO: Wait for Digital IO (IRQ)
-│     │ ->STX               │ ->GPSR   │ ->SFS   │         │        │          ->IDLE: Do nothing for some time
-│     ▼                     ▼          │         │         │        │          ->SRX:  Start receiving
-│   WAIT_STX              WAIT_GPSR    │         │         │        │          ->GPSR: Get Packet Status
-│     │ ->WDIO              │  ->RBUF  │         │         │        │          ->RBUF: Read buffer
-│     ▼                     ▼          │         │         │        │          ->SFS:  Switch to FS Mode (abort receiving)
-│   WAIT_WDIOTX           WAIT_RBUF    │         │         │        │
-│     │                     │          │         │         │        │
-│     │                     │◄─────────┘         │         │        │
-│     │                     │                    │         │        │
-│     ▼                     ▼                    ▼         ▼        ▼
-└───FINAL◄──────────────────────────────────────────────────────────┘
-*/
-
 #include "radio_phy.h"
 #include "sx1280_def.h"
 #include "hal/sys_time.h"
@@ -70,7 +34,7 @@ static void lldDoneCallback(void* pUser)
 				{
 					pCmd->cmd = CMD_CLR_IRQSTATUS;
 					pCmd->timeout_us = pPhy->data.timeouts.default_us;
-					pCmd->clearDio.mask = SX1280LLD_DIO_ALL;
+					pCmd->clearIrqStatus.irqMask = IRQ_RADIO_ALL;
 
 					pPhy->state = RADIO_PHY_STATE_CIRQ_RX;
 				}
@@ -144,6 +108,13 @@ static void lldDoneCallback(void* pUser)
 				pCmd->writeBuffer.size = pOp->tx.size;
 				memcpy(pCmd->writeBuffer.data, pOp->tx.data, pOp->tx.size);
 
+				// Simple whitening operation
+				for(size_t i = 0; i < pCmd->writeBuffer.size; i++)
+				{
+					if(i % 2 == 0)
+						pCmd->writeBuffer.data[i] ^= 0x55;
+				}
+
 				pPhy->state = RADIO_PHY_STATE_WBUF;
 			}
 			break;
@@ -158,22 +129,13 @@ static void lldDoneCallback(void* pUser)
 			break;
 			case RADIO_PHY_STATE_CIRQ_TX:
 			{
-				pCmd->cmd = CMD_CLEAR_PENDING_DIO;
-				pCmd->timeout_us = pPhy->data.timeouts.default_us;
-				pCmd->clearDio.mask = SX1280LLD_DIO_ALL;
-
-				pPhy->state = RADIO_PHY_STATE_CDIO_TX;
-			}
-			break;
-			case RADIO_PHY_STATE_CDIO_TX:
-			{
 				if(pPhy->data.pFem)
 					(*pPhy->data.pFem->setModeFunc)(pPhy->data.pFem->pInterfaceData, FEM_MODE_TX);
 
 				pCmd->cmd = CMD_SET_TX;
 				pCmd->timeout_us = pPhy->data.timeouts.modeChange_us;
-				pCmd->setTx.periodBase = PERIOD_TICK_SIZE_1000_US;
-				pCmd->setTx.periodCount = 0;
+				pCmd->setTx.periodBase = pOp->tx.txPeriodBase;
+				pCmd->setTx.periodCount = pOp->tx.txPeriodCount;
 
 				pPhy->state = RADIO_PHY_STATE_STX;
 			}
@@ -197,15 +159,6 @@ static void lldDoneCallback(void* pUser)
 			}
 			break;
 			case RADIO_PHY_STATE_CIRQ_RX:
-			{
-				pCmd->cmd = CMD_CLEAR_PENDING_DIO;
-				pCmd->timeout_us = pPhy->data.timeouts.default_us;
-				pCmd->clearDio.mask = SX1280LLD_DIO_ALL;
-
-				pPhy->state = RADIO_PHY_STATE_CDIO_RX;
-			}
-			break;
-			case RADIO_PHY_STATE_CDIO_RX:
 			{
 				if(pPhy->data.pFem)
 					(*pPhy->data.pFem->setModeFunc)(pPhy->data.pFem->pInterfaceData, FEM_MODE_RX);
@@ -232,7 +185,7 @@ static void lldDoneCallback(void* pUser)
 				if(pCmd->result == SX1280LLD_CMD_RESULT_OK)
 				{
 					pOp->rx.isPacketReceived = 1;
-					pOp->rx.receiveTime_us = pCmd->tQueued_us + pCmd->timeQueued_us + pCmd->timeTransfer_us + pCmd->timeBusy_us;
+					pOp->rx.receiveTime_us = pCmd->tQueued_us + pCmd->timeQueued_us + pCmd->timePending_us + pCmd->timeTransfer_us;
 
 					pCmd->cmd = CMD_GET_PACKETSTATUS;
 					pCmd->timeout_us = pPhy->data.timeouts.default_us;
@@ -267,6 +220,13 @@ static void lldDoneCallback(void* pUser)
 			break;
 			case RADIO_PHY_STATE_RBUF:
 			{
+				// Simple de-whitening operation
+				for(size_t i = 0; i < pCmd->readBuffer.size; i++)
+				{
+					if(i % 2 == 0)
+						pCmd->readBuffer.data[i] ^= 0x55;
+				}
+
 				memcpy(pOp->rx.data, pCmd->readBuffer.data, pOp->rx.size);
 
 				pPhy->state = RADIO_PHY_STATE_FINAL;

@@ -84,7 +84,7 @@ typedef uint16_t	colorformat;
 #define Black			HTML2COLOR(0x000000)
 #define Gray			HTML2COLOR(0x808080)
 #define Grey			Gray
-#define DarkGray		HTML2COLOR(0x404040)
+#define DarkGray		HTML2COLOR(0x202020)
 #define Blue			HTML2COLOR(0x0000FF)
 #define Red				HTML2COLOR(0xFF0000)
 #define Fuchsia			HTML2COLOR(0xFF00FF)

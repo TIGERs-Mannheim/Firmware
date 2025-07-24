@@ -254,6 +254,28 @@ void SPILLDAbortTransfer(SPILLD* pSPI)
 
 	*pSPI->pDMARxIFCR |= pSPI->IFCRRxMask; // clear rx flags
 	*pSPI->pDMATxIFCR |= pSPI->IFCRTxMask; // clear tx flags
+
+	// Clear SPE
+#ifdef STM32H7XX
+	pSPI->data.pRegister->CR1 &= ~SPI_CR1_SPE;
+#else
+	pSPI->data.pRegister->CR1 &= ~(SPI_CR1_SSI | SPI_CR1_SPE);
+#endif
+
+#if defined(STM32F3XX) || defined(STM32F7XX)
+	// flush RXFIFO of SPI
+	while((pSPI->data.pRegister->SR & SPI_SR_FRLVL) != 0)
+		pSPI->data.pRegister->DR;
+#endif
+
+#ifndef STM32H7XX
+	pSPI->data.pRegister->CR2 = 0;
+#endif
+
+	pSPI->activeCsPin.pPort = 0;
+
+	if(pSPI->doneCallback)
+		(pSPI->doneCallback)(pSPI->pCallbackData);
 }
 
 uint8_t	SPILLDIsTransferActive(SPILLD* pSPI)

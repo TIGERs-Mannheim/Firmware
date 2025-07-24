@@ -1,6 +1,5 @@
 #include "sx1280.h"
 #include "ch.h"
-#include "sx1280_def.h"
 
 SX1280LLD devSX1280;
 
@@ -23,7 +22,7 @@ CH_FAST_IRQ_HANDLER(Vector64) // EXTI3
 	if(EXTI->PR & EXTI_PR_PR3)
 	{
 		EXTI->PR = EXTI_PR_PR3;
-		SX1280LLDDioIRQ(&devSX1280);
+		SX1280LLDDioIRQ(&devSX1280, SX1280LLD_DIO_1);
 	}
 }
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "commands.h"
 #include "util/config.h"
 #include "util/shell_cmd.h"
 #include "drv/mpu_ext.h"

@@ -1,13 +1,5 @@
-/*
- * network_print.c
- *
- *  Created on: 23.10.2014
- *      Author: AndreR
- */
-
 #include "network_print.h"
 #include "commands.h"
-#include "intercom_constants.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -30,7 +22,6 @@ void NetworkPrintInit(NetworkPrintOutputFunc pOutFunc)
 	networkPrint.pPrintPos = (char*)pData;
 
 	pHeader->cmd = CMD_SYSTEM_CONSOLE_PRINT;
-	pHeader->section = SECTION_SYSTEM;
 
 	pConPrint->source = 1;
 }

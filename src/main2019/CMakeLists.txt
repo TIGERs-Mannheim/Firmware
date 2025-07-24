@@ -88,6 +88,7 @@ list(APPEND main2019_SOURCES
 
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
     
     ${cmsis_core_INCLUDE_DIRS}
     ${shared_INCLUDE_DIRS}
@@ -123,7 +124,7 @@ add_link_options(
 )
 
 # Normal run/application code
-add_executable(${RUN_EXEC}
+add_executable(${RUN_EXEC} EXCLUDE_FROM_ALL
     ${main2019_SOURCES}
 )
 
@@ -147,16 +148,16 @@ add_custom_command(OUTPUT motor2019.bin
     COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:motor2019.elf> motor2019.bin
     DEPENDS motor2019.elf)
 
-EmbedResource(${RUN_EXEC} motor2019.bin ${CMAKE_CURRENT_SOURCE_DIR}/generated/mcu_motor_code.c)
+EmbedResource(${RUN_EXEC} motor2019.bin ${CMAKE_CURRENT_BINARY_DIR}/generated/mcu_motor_code.c)
 
 add_custom_command(OUTPUT ir2019.bin
     COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:ir2019.elf> ir2019.bin
     DEPENDS ir2019.elf)
 
-EmbedResource(${RUN_EXEC} ir2019.bin ${CMAKE_CURRENT_SOURCE_DIR}/generated/mcu_dribbler_code.c)
+EmbedResource(${RUN_EXEC} ir2019.bin ${CMAKE_CURRENT_BINARY_DIR}/generated/mcu_dribbler_code.c)
 
 # Bootloader code
-add_executable(${BOOT_EXEC}
+add_executable(${BOOT_EXEC} EXCLUDE_FROM_ALL
     main_bootloader.c
     system.c
     

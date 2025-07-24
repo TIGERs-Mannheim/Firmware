@@ -122,15 +122,9 @@ int16_t FlashErase(uint32_t addr, uint32_t endAddr)
 		result = eraseSector(sector);
 		if(result)
 			break;
-
-		uint32_t sectorSize = 0;
-		if(sector < numSectors-1)
-			sectorSize = sectorStartAddresses[sector+1] - sectorStartAddresses[sector];
-		else
-			sectorSize = 256*1024;
-
-		SCB_InvalidateDCache_by_Addr((void*)&sectorStartAddresses[sector], sectorSize);
 	}
+
+	SCB_CleanInvalidateDCache();
 
 	FLASH->CR |= FLASH_CR_LOCK;
 

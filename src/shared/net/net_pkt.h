@@ -12,16 +12,16 @@ typedef struct _NetPkt
 	struct
 	{
 		uint16_t type; // Higher level protocol type
-		MAC src; // If empty on transmit, the host MAC is filled in
+		MAC src; // By default set to the host MAC
 		MAC dst;
 	} ethernet;
 
 	struct
 	{
 		uint8_t protocol; // Higher level protocol identifier
-		IPv4Address src; // If empty on transmit, the host IP is filled in
+		IPv4Address src; // By default set to the host IP
 		IPv4Address dst;
-		uint8_t ttl; // If zero on transmit: set to 64
+		uint8_t ttl; // By default set to 64
 		uint16_t optionLength; // Additional option bytes already in buf
 	} ipv4;
 

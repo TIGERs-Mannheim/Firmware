@@ -53,8 +53,8 @@ static const GWidgetStyle YellowTextStyle = {
 
 	// disabled color set
 	{
-		HTML2COLOR(0x888800),		// text
-		HTML2COLOR(0x888800),		// edge
+		HTML2COLOR(0x555500),		// text
+		HTML2COLOR(0x555500),		// edge
 		HTML2COLOR(0x404040),		// fill
 		HTML2COLOR(0x004000),		// progress - active area
 	},
@@ -82,8 +82,8 @@ static const GWidgetStyle BlueTextStyle = {
 
 	// disabled color set
 	{
-		HTML2COLOR(0x000088),		// text
-		HTML2COLOR(0x000088),		// edge
+		HTML2COLOR(0x000055),		// text
+		HTML2COLOR(0x000055),		// edge
 		HTML2COLOR(0x404040),		// fill
 		HTML2COLOR(0x004000),		// progress - active area
 	},

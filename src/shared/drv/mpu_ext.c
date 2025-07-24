@@ -21,7 +21,7 @@ void MpuExtInit(MpuExt* pExt, UartDma* pUart, tprio_t prio)
 	pExt->pTask = chThdCreateStatic(pExt->waTask, sizeof(pExt->waTask), prio, &mpuExtTask, pExt);
 }
 
-int16_t MpuExtSendPacket(MpuExt* pExt, PacketHeader* pHeader, const void* _pData, size_t dataLength)
+int16_t MpuExtSendPacket(MpuExt* pExt, ExtPacketHeader* pHeader, const void* _pData, size_t dataLength)
 {
 	if(dataLength > MPU_EXT_MAX_PAYLOAD_SIZE)
 		return ERROR_NOT_ENOUGH_MEMORY;
@@ -159,7 +159,7 @@ static void processReceivedData(MpuExt* pExt)
 					pExt->liveStats.rxPayload += decodedSize - MPU_EXT_TRAILER_SIZE;
 					pExt->isInstalled = 1;
 
-					PacketHeader* pHeader = (PacketHeader*)pExt->cobsProcBuf;
+					ExtPacketHeader* pHeader = (ExtPacketHeader*)pExt->cobsProcBuf;
 					uint8_t* pData = pExt->cobsProcBuf + MPU_EXT_HEADER_SIZE;
 					size_t dataLength = decodedSize - MPU_EXT_TRAILER_SIZE - MPU_EXT_HEADER_SIZE;
 

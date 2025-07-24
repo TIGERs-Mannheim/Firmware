@@ -36,11 +36,11 @@ int16_t ArpSend(Arp* pArp, uint8_t operation, MAC targetMAC, IPv4Address targetI
 	pARP->hwAddrLen = 6;
 	pARP->protAddrLen = 4;
 	pARP->operation = operation;
-	pARP->srcHwAddr = pIf->data.mac;
-	pARP->srcProtAddr = pIf->data.ip;
+	pARP->srcHwAddr = pIf->mac;
+	pARP->srcProtAddr = pIf->ip;
 
 	if(operation == ARP_OPERATION_REQUEST)
-		pARP->dstHwAddr = MACSet(0, 0, 0, 0, 0, 0);
+		pARP->dstHwAddr = MAC_ZEROS;
 	else
 		pARP->dstHwAddr = targetMAC;
 
@@ -135,7 +135,7 @@ static NetVerdict receive(NetPkt* pPkt, void* pUser)
 		return NET_VERDICT_DROP;
 	}
 
-	if(operation == ARP_OPERATION_REQUEST && pPacket->dstProtAddr.u32 == pArp->pIf->data.ip.u32)
+	if(operation == ARP_OPERATION_REQUEST && pPacket->dstProtAddr.u32 == pArp->pIf->ip.u32)
 	{
 		ArpSend(pArp, ARP_OPERATION_REPLY, pPacket->srcHwAddr, pPacket->srcProtAddr);
 	}

@@ -223,7 +223,7 @@ static void testRotationIdent(Test* pTest)
 		McuMotorSetCurrentDQ(&devMotors.mcu[i], 0.0f, 0.0f);
 
 	// sample deceleration
-	float tStart = SysTime();
+	float tStart = SysTimeUSec()*1e-6f;
 	float startRotVel = robot.sensors.gyr.rotVel[2];
 
 	while(fabsf(robot.sensors.gyr.rotVel[2]) > 2.0f)
@@ -231,7 +231,7 @@ static void testRotationIdent(Test* pTest)
 		chThdSleepMilliseconds(1);
 	}
 
-	float tEnd = SysTime();
+	float tEnd = SysTimeUSec()*1e-6f;
 	float endRotVel = robot.sensors.gyr.rotVel[2];
 
 	// determine inertia

@@ -93,16 +93,16 @@ const GWidgetStyle DarkenedWidgetStyle = {
 
 	// enabled color set
 	{
-		HTML2COLOR(0x404040),		// text
-		HTML2COLOR(0x404040),		// edge
+		HTML2COLOR(0x202020),		// text
+		HTML2COLOR(0x202020),		// edge
 		HTML2COLOR(0x000000),		// fill
 		HTML2COLOR(0x000000)		// progress - active area
 	},
 
 	// disabled color set
 	{
-		HTML2COLOR(0x404040),		// text
-		HTML2COLOR(0x404040),		// edge
+		HTML2COLOR(0x202020),		// text
+		HTML2COLOR(0x202020),		// edge
 		HTML2COLOR(0x000000),		// fill
 		HTML2COLOR(0x000000)		// progress - active area
 	},

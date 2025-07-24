@@ -103,7 +103,7 @@ static void parseInputData(const SkillInput* pInput, SkillOutput* pOutput)
 
 	// This sets all members of the kicker and dribbler part of the output and handles unit conversion/bit unstuffing.
 	// You may overwrite pOutput->dribbler and pOutput->kicker afterwards to adjust it to your needs.
-	SkillBasicsParseKDInput(pInput, &pKickBall->kd, pOutput);
+	SkillBasicsParseKDInput(&pKickBall->kd, pOutput);
 
 	// Ensure we do not set any zero movement limits, control doesn't like that
 	if(pKickBall->velMaxXY == 0)
@@ -129,14 +129,14 @@ static void parseInputData(const SkillInput* pInput, SkillOutput* pOutput)
 	fieldHalfSizeBits[0] = ((pKickBall->fieldSizeMSB & 0x0F) << 2) | (pKickBall->targetPosAndFieldSizeLSB[0] & 0x03);
 	fieldHalfSizeBits[1] = ((pKickBall->fieldSizeMSB & 0xF0) >> 2) | (pKickBall->targetPosAndFieldSizeLSB[1] & 0x03);
 
-	skillKickBall.fieldHalfSize[0] = fieldHalfSizeBits[0] * 0.125f;
-	skillKickBall.fieldHalfSize[1] = fieldHalfSizeBits[1] * 0.125f;
+	skillKickBall.fieldHalfSize_m[0] = fieldHalfSizeBits[0] * 0.125f;
+	skillKickBall.fieldHalfSize_m[1] = fieldHalfSizeBits[1] * 0.125f;
 
 	// Convert ball position to SI units
-	skillKickBall.ballPos[0] = pKickBall->ballPos[0] * 0.001f;
-	skillKickBall.ballPos[1] = pKickBall->ballPos[1] * 0.001f;
+	skillKickBall.ballPos_m[0] = pKickBall->ballPos[0] * 0.001f;
+	skillKickBall.ballPos_m[1] = pKickBall->ballPos[1] * 0.001f;
 
 	// Convert target position bits to SI units
-	skillKickBall.targetPos[0] = (pKickBall->targetPosAndFieldSizeLSB[0] >> 2) * 0.001f;
-	skillKickBall.targetPos[1] = (pKickBall->targetPosAndFieldSizeLSB[1] >> 2) * 0.001f;
+	skillKickBall.targetPos_m[0] = (pKickBall->targetPosAndFieldSizeLSB[0] >> 2) * 0.001f;
+	skillKickBall.targetPos_m[1] = (pKickBall->targetPosAndFieldSizeLSB[1] >> 2) * 0.001f;
 }

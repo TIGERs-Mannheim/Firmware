@@ -1,12 +1,11 @@
 #pragma once
 
 #include "hal/uart_dma.h"
-#include "util/config.h"
 #include "util/cobs.h"
-#include "commands.h"
+#include "ext_commands.h"
 
 #define MPU_EXT_MAX_PAYLOAD_SIZE (512*4)
-#define MPU_EXT_HEADER_SIZE sizeof(PacketHeader)
+#define MPU_EXT_HEADER_SIZE sizeof(ExtPacketHeader)
 #define MPU_EXT_TRAILER_SIZE sizeof(uint32_t)
 #define MPU_EXT_MAX_PACKET_SIZE (MPU_EXT_MAX_PAYLOAD_SIZE + MPU_EXT_HEADER_SIZE + MPU_EXT_TRAILER_SIZE)
 #define MPU_EXT_MAX_COBS_SIZE COBSMaxStuffedSize(MPU_EXT_MAX_PACKET_SIZE)
@@ -26,7 +25,7 @@ typedef struct _MpuExtStats
 
 typedef struct _MpuExtPacketHandler
 {
-	PacketHeader cmd;
+	ExtPacketHeader cmd;
 	void* pStorage;
 	size_t storageSize;
 	uint8_t updated;
@@ -66,5 +65,5 @@ typedef struct _MpuExt
 } MpuExt;
 
 void MpuExtInit(MpuExt* pExt, UartDma* pUart, tprio_t prio);
-int16_t MpuExtSendPacket(MpuExt* pExt, PacketHeader* pHeader, const void* _pData, size_t dataLength);
+int16_t MpuExtSendPacket(MpuExt* pExt, ExtPacketHeader* pHeader, const void* _pData, size_t dataLength);
 void MpuExtAddPacketHandler(MpuExt* pExt, MpuExtPacketHandler* pHandler);

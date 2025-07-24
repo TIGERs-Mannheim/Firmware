@@ -5,5 +5,11 @@ scripts/logAnalyzer/*.mex*
 *.kdev4
 /build/
 git_version.h
-.idea/
 src/main2019/generated/
+
+# Clion user-specific stuff
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf

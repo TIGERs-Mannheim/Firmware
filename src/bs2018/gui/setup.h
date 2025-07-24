@@ -1,7 +1,6 @@
 #pragma once
 
 #include "gfx.h"
-#include "intercom_constants.h"
 #include "../base_station.h"
 
 typedef struct _SetupData
@@ -17,6 +16,7 @@ typedef struct _SetupData
 	{
 		IPv4Address ip;
 		uint16_t port;
+		uint8_t useDhcp;
 	} eth;
 
 	struct
@@ -29,5 +29,5 @@ typedef struct _SetupData
 typedef void(*SetupChangedCallback)(const SetupData*);
 
 GHandle SetupCreate();
-void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig);
+void SetupUpdate(BaseStationConfig* pBaseConfig, RadioBaseConfig* pRadioConfig, NetIf* pIf);
 void SetupSetCallback(SetupChangedCallback cb);

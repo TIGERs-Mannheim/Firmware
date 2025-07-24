@@ -1,10 +1,3 @@
-/*
- * robot.c
- *
- *  Created on: 19.07.2016
- *      Author: AndreR
- */
-
 #include "robot.h"
 #include "commands.h"
 #include "struct_ids.h"
@@ -15,6 +8,7 @@
 #include "robot/ctrl_panthera.h"
 #include "math/angle_math.h"
 #include "math/vector.h"
+#include "math/clamp.h"
 #include "robot_math.h"
 
 Robot robot;
@@ -34,7 +28,7 @@ Robot robot;
 static void clearUpdateFlags();
 static void doLogging();
 static void sendMatchFeedback();
-static void parseMatchCtrl();
+static void parseMatchCtrlAndBroadcast();
 static void connectionCheck();
 static void processEvent(uint32_t event);
 static void stateWatchdog();
@@ -135,7 +129,7 @@ void RobotTask(void* params)
 		connectionCheck();
 
 		// get skill data, parse flags, read vision pos (if available)
-		parseMatchCtrl();
+		parseMatchCtrlAndBroadcast();
 
 		uint32_t tInput = SysTimeCycleCounter();
 		robot.performance.inputTime = SysTimeCycleCounterDiffUSec(tStart, tInput);
@@ -270,7 +264,6 @@ void RobotEnableNetwork()
 void RobotSendVersionInfo()
 {
 	PacketHeader header;
-	header.section = SECTION_SYSTEM;
 	header.cmd = CMD_SYSTEM_VERSION;
 
 	SystemVersion version;
@@ -296,7 +289,7 @@ static void processEvent(uint32_t event)
 
 	if(event == ROBOT_EVENT_NET_ENABLE)
 	{
-		network.linkDisabled = 0;
+		NetworkEnableLink(1);
 	}
 
 	if(event == ROBOT_EVENT_BAT_EMPTY)
@@ -414,7 +407,7 @@ static void sendMatchFeedback()
 		robot.feedbackStateUpdated[1] = 1;
 
 	// check if there are other packets to be send, if not => send a feedback
-	uint8_t txActive = !NetworkImplIsSendBufferEmpty();
+	uint8_t txActive = !NetworkImplGetState().isSendBufferEmpty;
 
 	// also use a timeout of 100ms to send a feedback at at least 10Hz
 	if(txActive && (SysTimeUSec() - robot.lastLogTime) < 100000)
@@ -427,13 +420,14 @@ static void sendMatchFeedback()
 
 	const float maxBatVoltage = robot.aux.power.cellVoltageMax*robot.aux.power.numCells;
 	const float minBatVoltage = robot.aux.power.cellVoltageMin*robot.aux.power.numCells;
+	const float relativeBatteryLevel = (robot.sensors.power.voltage - minBatVoltage)/(maxBatVoltage - minBatVoltage);
 
-	feedback.batteryLevel = (uint8_t)(robot.sensors.power.voltage*10.0f + 0.5f);
-	feedback.batteryPercent = (uint8_t)fmaxf(0, (robot.sensors.power.voltage - minBatVoltage)/(maxBatVoltage - minBatVoltage)*255.0f);
-	feedback.kickerLevel = robot.sensors.kicker.level;
-	feedback.kickerMax = robot.aux.kicker.maxLevel;
+	feedback.batteryLevel = ClampToUint8f(robot.sensors.power.voltage*10.0f);
+	feedback.batteryPercent = ClampToUint8f(relativeBatteryLevel*255.0f);
+	feedback.kickerLevel = ClampToUint8f(robot.sensors.kicker.level);
+	feedback.kickerMax = ClampToUint8f(robot.aux.kicker.maxLevel);
 
-	uint32_t dribSpeed = fmaxf(0, robot.state.dribblerVel * 4.0f + 0.5f);
+	uint32_t dribSpeed = ClampMinMaxToIntf(robot.state.dribblerVel * 4.0f, 0.0f, 63.0f);
 	uint32_t dribState = robot.state.dribblerState & 0x03;
 
 	feedback.dribblerState = (dribSpeed << 2) | dribState;
@@ -448,6 +442,7 @@ static void sendMatchFeedback()
 		feedback.flags |= (1 << 5);
 	else
 		feedback.flags |= (2 << 5);
+
 	feedback.hardwareId = RobotImplGetHardwareId();
 	feedback.features = gatherFeatures() | (robot.mode << 12);
 
@@ -458,9 +453,9 @@ static void sendMatchFeedback()
 	{
 		robot.feedbackStateUpdated[0] = 0;
 
-		feedback.curPosition[0] = (int16_t)(pTimeSlot->insState[0]*1000.0f);
-		feedback.curPosition[1] = (int16_t)(pTimeSlot->insState[1]*1000.0f);
-		feedback.curPosition[2] = (int16_t)(AngleNormalize(pTimeSlot->insState[2])*1000.0f);
+		feedback.curPosition[0] = ClampToInt16f(pTimeSlot->insState[0]*1000.0f);
+		feedback.curPosition[1] = ClampToInt16f(pTimeSlot->insState[1]*1000.0f);
+		feedback.curPosition[2] = ClampToInt16f(AngleNormalize(pTimeSlot->insState[2])*1000.0f);
 	}
 	else
 	{
@@ -477,9 +472,9 @@ static void sendMatchFeedback()
 		Vector2fTurnLocal2Global(pTimeSlot->insState[2], pTimeSlot->insState[3], pTimeSlot->insState[4], &globalVel[0], &globalVel[1]);
 		globalVel[2] = pTimeSlot->meas.gyrAcc[0];
 
-		feedback.curVelocity[0] = (int16_t)(globalVel[0]*1000.0f);
-		feedback.curVelocity[1] = (int16_t)(globalVel[1]*1000.0f);
-		feedback.curVelocity[2] = (int16_t)(globalVel[2]*1000.0f);
+		feedback.curVelocity[0] = ClampToInt16f(globalVel[0]*1000.0f);
+		feedback.curVelocity[1] = ClampToInt16f(globalVel[1]*1000.0f);
+		feedback.curVelocity[2] = ClampToInt16f(globalVel[2]*1000.0f);
 	}
 	else
 	{
@@ -492,8 +487,8 @@ static void sendMatchFeedback()
 	{
 		float ballPosGlobal[2];
 		Vector2fTurnLocal2Global(robot.state.pos[2], robot.state.ballPos[0], robot.state.ballPos[1] + robot.specs.physical.dribblerDistance_m, ballPosGlobal, ballPosGlobal+1);
-		feedback.ballPosition[0] = (int16_t)(ballPosGlobal[0] + robot.state.pos[0] * 1000.0f);
-		feedback.ballPosition[1] = (int16_t)(ballPosGlobal[1] + robot.state.pos[1] * 1000.0f);
+		feedback.ballPosition[0] = ClampToInt16f(ballPosGlobal[0] + robot.state.pos[0] * 1000.0f);
+		feedback.ballPosition[1] = ClampToInt16f(ballPosGlobal[1] + robot.state.pos[1] * 1000.0f);
 		feedback.ballPosAge = 0;
 	}
 	else
@@ -507,15 +502,21 @@ static void sendMatchFeedback()
 		}
 		else
 		{
-			feedback.ballPosition[0] = (int16_t)(robot.sensors.ball.pos[0]*1000.0f);
-			feedback.ballPosition[1] = (int16_t)(robot.sensors.ball.pos[1]*1000.0f);
+			feedback.ballPosition[0] = ClampToInt16f(robot.sensors.ball.pos[0]*1000.0f);
+			feedback.ballPosition[1] = ClampToInt16f(robot.sensors.ball.pos[1]*1000.0f);
 		}
 
 		feedback.ballPosAge = ballPosAgeMs;
 	}
 
+	feedback.lastKickDuration = ClampToUint8f(robot.aux.kicker.lastKick.kickDuration_s * (1.0f / 0.05e-3f));
+	feedback.lastKickDribbleForce = ClampToUint8f(robot.aux.kicker.lastKick.dribblerForce_N * (1.0f / 0.0625f));
+	feedback.lastKickDribbleVelDev = ClampMinMaxToIntf(robot.aux.kicker.lastKick.dribblerVel_mDs * (1.0f / 0.0625f), 0.0f, 127.0f);
+
+	if(robot.aux.kicker.lastKick.kickDevice == KICKER_DEVICE_CHIP)
+		feedback.lastKickDribbleVelDev |= SYSTEM_MATCH_FEEDBACK_LAST_KICK_DEVICE_CHIP;
+
 	PacketHeader header;
-	header.section = SECTION_SYSTEM;
 	header.cmd = CMD_SYSTEM_MATCH_FEEDBACK;
 	NetworkSendPacket(&header, (uint8_t*) &feedback, sizeof(SystemMatchFeedback));
 }
@@ -546,27 +547,29 @@ static void detectCover()
 
 	robot.coverPresent = coverPresent;
 
-	if(coverPresent && network.linkDisabled)
+	if(coverPresent && network.mode == NETWORK_MODE_DISABLED)
 		chMBPostTimeout(&robot.eventQueue, ROBOT_EVENT_NET_ENABLE, TIME_IMMEDIATE);
 }
 
-static void parseMatchCtrl()
+static void parseMatchCtrlAndBroadcast()
 {
 	static uint8_t lastSong;
 
-	// prefer match ctrl cmd from primary wireless interface
 	SystemMatchCtrl matchCtrl;
-	uint32_t matchCtrlTime;
-	uint8_t matchCtrlUpdated;
+	BaseStationBroadcast broadcast;
 
 	chMtxLock(&network.matchCtrlMutex);
-
 	memcpy(&matchCtrl, &network.lastMatchCtrlCmd, sizeof(SystemMatchCtrl));
-	matchCtrlTime = network.matchCtrlTime;
-	matchCtrlUpdated = network.matchCtrlUpdated;
+	uint32_t matchCtrlTime = network.matchCtrlTime;
+	uint8_t matchCtrlUpdated = network.matchCtrlUpdated;
 	network.matchCtrlUpdated = 0;
-
 	chMtxUnlock(&network.matchCtrlMutex);
+
+	chMtxLock(&network.baseStationBroadcastMutex);
+	memcpy(&broadcast, &network.lastBaseStationBroadcast, sizeof(BaseStationBroadcast));
+	uint32_t broadcastTime = network.baseStationBroadcastTime;
+	network.baseStationBroadcastUpdated = 0;
+	chMtxUnlock(&network.baseStationBroadcastMutex);
 
 	if(robot.sensors.vision.time != matchCtrlTime)
 	{
@@ -588,20 +591,48 @@ static void parseMatchCtrl()
 				chMBPostTimeout(&robot.eventQueue, ROBOT_EVENT_VISION_RECEIVED, TIME_IMMEDIATE);
 		}
 
-		if(matchCtrl.camId & SYSTEM_MATCH_CTRL_CAM_ID_FLAG_NO_VISION)
+		if(broadcast.flags & BASE_STATION_BROADCAST_FLAG_NO_VISION)
 		{
 			robot.sensors.vision.time = matchCtrlTime;
 			robot.sensors.vision.updated = 0;
 			robot.sensors.vision.noVision = 1;
 
-			if(robot.coverPresent)
-				chMBPostTimeout(&robot.eventQueue, ROBOT_EVENT_VISION_RECEIVED, TIME_IMMEDIATE);
+			chMBPostTimeout(&robot.eventQueue, ROBOT_EVENT_VISION_RECEIVED, TIME_IMMEDIATE);
 		}
+	}
+
+	if(robot.sensors.visionBall.time != broadcastTime)
+	{
+		if(broadcast.ballPosition[0] != BASE_STATION_BROADCAST_UNUSED_FIELD)
+		{
+			uint32_t delay = broadcast.ballPosDelay;
+			delay = (delay*25000)/100;	// delay now in [us]
+
+			robot.sensors.visionBall.pos[0] = broadcast.ballPosition[0]*0.001f;
+			robot.sensors.visionBall.pos[1] = broadcast.ballPosition[1]*0.001f;
+			robot.sensors.visionBall.camId = broadcast.ballCamId;
+			robot.sensors.visionBall.time = broadcastTime;
+			robot.sensors.visionBall.delay = delay;
+			robot.sensors.visionBall.updated = 1;
+		}
+	}
+
+	if(robot.sensors.visionGeometry.time != broadcastTime)
+	{
+		uint32_t fieldSize = broadcast.fieldSize[0] | (uint32_t)broadcast.fieldSize[1] << 8 | (uint32_t)broadcast.fieldSize[2] << 16;
+
+		robot.sensors.visionGeometry.time = broadcastTime;
+		robot.sensors.visionGeometry.fieldSize[0] = (fieldSize & 0xFFF) * 0.01f;
+		robot.sensors.visionGeometry.fieldSize[1] = (fieldSize >> 12) * 0.01f;
+		robot.sensors.visionGeometry.boundaryWidth = broadcast.boundaryWidth * 0.01f;
+		robot.sensors.visionGeometry.goalWidth = broadcast.goalWidth * 0.01f;
+		robot.sensors.visionGeometry.goalDepth = broadcast.goalDepth * 0.01f;
+		robot.sensors.visionGeometry.updated = 1;
 	}
 
 	if(robot.enabledSystems & ROBOT_SYSTEM_KICKER)
 	{
-		if(matchCtrl.flags & SYSTEM_MATCH_CTRL_FLAGS_KICKER_AUTOCHG)
+		if(broadcast.flags & BASE_STATION_BROADCAST_FLAG_KICKER_AUTOCHG)
 			RobotImplKickerAutoCharge(1);
 		else
 			RobotImplKickerAutoCharge(0);
@@ -614,11 +645,16 @@ static void parseMatchCtrl()
 
 	lastSong = song;
 
-	uint8_t leds = (matchCtrl.flags & SYSTEM_MATCH_CTRL_FLAGS_LED_MASK) >> 4;
+	uint8_t leds = (matchCtrl.flags & SYSTEM_MATCH_CTRL_FLAGS_LED_MASK) >> 5;
 	if(robot.enabledSystems & ROBOT_SYSTEM_LEDS)
-		RobotImplSetLEDs(leds);
+	{
+		if(robot.sumatraOnline)
+			RobotImplSetLEDs(leds);
+		else
+			RobotImplSetLEDs(SYSTEM_MATCH_CTRL_FLAGS_LED_OFF);
+	}
 
-	if(matchCtrl.flags & SYSTEM_MATCH_CTRL_FLAGS_STRICT_VEL_LIMIT)
+	if(broadcast.flags & BASE_STATION_BROADCAST_FLAG_STRICT_VEL_LIMIT)
 		robot.skillOutput.drive.limits.strictVelLimit = 1;
 	else
 		robot.skillOutput.drive.limits.strictVelLimit = 0;
@@ -634,7 +670,7 @@ static void parseMatchCtrl()
 
 static void connectionCheck()
 {
-	uint8_t baseOnline = NetworkImplIsBaseOnline();
+	uint8_t baseOnline = NetworkImplGetState().isBaseOnline;
 	if(!baseOnline && robot.bsOnline)
 		robot.bsOnline = 0;
 
@@ -745,7 +781,7 @@ static void stateWatchdog()
 static void handleDataAcquisitionMode()
 {
 	// check if there are other packets to be send, if not => send a feedback
-	uint8_t txActive = !NetworkImplIsSendBufferEmpty();
+	uint8_t txActive = !NetworkImplGetState().isSendBufferEmpty;
 	if(txActive)
 		return;
 
@@ -762,7 +798,6 @@ static void handleDataAcquisitionMode()
 			}
 
 			PacketHeader header;
-			header.section = SECTION_DATA_ACQ;
 			header.cmd = CMD_DATA_ACQ_MOTOR_MODEL;
 
 			NetworkSendPacket(&header, &mm, sizeof(DataAcqMotorModel));
@@ -786,7 +821,6 @@ static void handleDataAcquisitionMode()
 			bm.visionTime = robot.sensors.vision.time - robot.sensors.vision.delay;
 
 			PacketHeader header;
-			header.section = SECTION_DATA_ACQ;
 			header.cmd = CMD_DATA_ACQ_BOT_MODEL;
 
 			NetworkSendPacket(&header, &bm, sizeof(DataAcqBotModel));
@@ -806,7 +840,6 @@ static void handleDataAcquisitionMode()
 			de.gyrVel = (int16_t)(robot.sensors.gyr.rotVel[2]*1000.0f);
 
 			PacketHeader header;
-			header.section = SECTION_DATA_ACQ;
 			header.cmd = CMD_DATA_ACQ_DELAYS;
 
 			NetworkSendPacket(&header, &de, sizeof(DataAcqDelays));
@@ -941,11 +974,12 @@ static void handleDataAcquisitionMode()
 			bm2.mode = modeXY | (modeW << 4);
 
 			PacketHeader header;
-			header.section = SECTION_DATA_ACQ;
 			header.cmd = CMD_DATA_ACQ_BOT_MODEL_V2;
 
 			NetworkSendPacket(&header, &bm2, sizeof(DataAcqBotModelV2));
 		}
+		break;
+		default:
 		break;
 	}
 }

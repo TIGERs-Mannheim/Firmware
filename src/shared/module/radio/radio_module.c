@@ -69,17 +69,17 @@ void RadioModulePrintTrace(RadioModule* pRadio)
 		printf("+ \e[35m%s 0x%02hX                           % 10u    % 5u  % 10u\e[0m\r\n", pName,
 				(uint16_t)(pSlot->id & (RADIO_HEADER_CLIENT_ID_MASK | RADIO_HEADER_BROADCAST)),
 				pPhyOp->tStart_us, pPhyOp->tEnd_us - pPhyOp->tStart_us, pPhyOp->tReceive_us);
-		printf("|   \e[90mCMD                           RES   tQueued    dExec   dQue  dXfer  dBusy\e[0m\r\n");
+		printf("|   \e[90mCMD                           RES   tQueued    dExec   dQue  dPend  dXfer\e[0m\r\n");
 
 		for(uint32_t j = 0; j < pPhyOp->cmdTraceUsed; j++)
 		{
 			SX1280LLDCmdTrace* pEvt = &pPhyOp->cmdTrace[j];
 
-			uint32_t dExec_us = pEvt->timeQueued_us + pEvt->timeTransfer_us + pEvt->timeBusy_us;
+			uint32_t dExec_us = pEvt->timeQueued_us + pEvt->timePending_us + pEvt->timeTransfer_us;
 			const char* pName = SX1280LLDGetCmdName(pEvt->cmd);
 
 			printf("|   %s 0x%02hX %1u  % 10u % 8d % 6d % 6d % 6d\r\n", pName, (uint16_t)pEvt->cmd,
-					pEvt->result, pEvt->tQueued_us, dExec_us, pEvt->timeQueued_us, pEvt->timeTransfer_us, pEvt->timeBusy_us);
+					pEvt->result, pEvt->tQueued_us, dExec_us, pEvt->timeQueued_us, pEvt->timePending_us, pEvt->timeTransfer_us);
 		}
 
 		printf("+---\r\n");
@@ -216,6 +216,42 @@ static void phyOpPrepareNextSetup(RadioPhyOp* pOp, void* pUser)
 		break;
 		case 9:
 		{
+			pOp->type = RADIO_PHY_OP_MOD_REG;
+			pOp->modReg.address = 0x089F; // LNA Gain Control
+			pOp->modReg.clearMask = 0x80;
+
+			if(pRadio->data.settingsCommon.rxGain > 0)
+				pOp->modReg.setMask = 0x80;
+			else
+				pOp->modReg.setMask = 0;
+		}
+		break;
+		case 10:
+		{
+			pOp->type = RADIO_PHY_OP_MOD_REG;
+			pOp->modReg.address = 0x0895; // Manual Gain Setting
+			pOp->modReg.clearMask = 0x01;
+
+			if(pRadio->data.settingsCommon.rxGain < 0)
+				pOp->modReg.setMask = 0x01;
+			else
+				pOp->modReg.setMask = 0;
+		}
+		break;
+		case 11:
+		{
+			pOp->type = RADIO_PHY_OP_MOD_REG;
+			pOp->modReg.address = 0x089E; // LNA Gain Value
+			pOp->modReg.clearMask = 0x0F;
+
+			if(pRadio->data.settingsCommon.rxGain > 0)
+				pOp->modReg.setMask = pRadio->data.settingsCommon.rxGain;
+			else
+				pOp->modReg.setMask = 0x0A;
+		}
+		break;
+		case 12:
+		{
 			uint32_t sync;
 
 			switch(pRadio->data.packetType)
@@ -231,7 +267,7 @@ static void phyOpPrepareNextSetup(RadioPhyOp* pOp, void* pUser)
 			memcpy(pCmd->writeRegister.data, &sync, 4);
 		}
 		break;
-		case 10:
+		case 13:
 		{
 			pOp->type = RADIO_PHY_OP_MOD_REG;
 			pOp->modReg.address = 0x09CD;
@@ -245,31 +281,48 @@ static void phyOpPrepareNextSetup(RadioPhyOp* pOp, void* pUser)
 			}
 		}
 		break;
-		case 11:
+		case 14:
+		{
+			pCmd->cmd = CMD_SET_LONGPREAMBLE;
+			pCmd->setLongPreamble.enable = 0;
+
+			if(pRadio->data.packetType == PACKET_TYPE_GFSK && pRadio->data.settings.gfsk.longPreambleCount)
+				pCmd->setLongPreamble.enable = 1;
+		}
+		break;
+		case 15:
+		{
+			pOp->type = RADIO_PHY_OP_MOD_REG;
+			pOp->modReg.address = 0x09C5; // Data whitening initial seed
+			pOp->modReg.clearMask = 0xFF;
+			pOp->modReg.setMask = 0x42;
+		}
+		break;
+		case 16:
 		{
 			pCmd->cmd = CMD_SET_AUTOFS;
 			pCmd->setAutoFs.enable = 1;
 		}
 		break;
-		case 12:
+		case 17:
 		{
 			pCmd->cmd = CMD_SET_TXPARAMS;
 			pCmd->setTxParams.power = pRadio->data.settingsCommon.txPower;
 			pCmd->setTxParams.rampTime = pRadio->data.settingsCommon.paRampTime;
 		}
 		break;
-		case 13:
+		case 18:
 		{
 			pCmd->cmd = CMD_SET_FS;
 		}
 		break;
-		case 14:
+		case 19:
 		{
 			pCmd->cmd = CMD_CLR_IRQSTATUS;
 			pCmd->clearIrqStatus.irqMask = IRQ_RADIO_ALL;
 		}
 		break;
-		case 15:
+		case 20:
 		{
 			pCmd->cmd = CMD_SET_DIOIRQPARAMS;
 			pCmd->setDioIrqParams.irqMask = IRQ_TX_DONE | IRQ_RX_DONE;

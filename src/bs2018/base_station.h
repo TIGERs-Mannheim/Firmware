@@ -15,6 +15,7 @@ typedef struct PACKED _BaseStationConfig
 
 	struct
 	{
+		uint8_t isDHCPEnabled; // When DHCP is on the IP address given by DHCP is used
 		IPv4Address ip;
 		uint16_t port;
 	} base;
@@ -34,6 +35,7 @@ typedef struct _BaseStationStats
 typedef struct _BaseStation
 {
 	NetIf networkInterface;
+	char hostname[32];
 
     FEMInterface femInterface;
 	RadioPhy radioPhy;
@@ -67,7 +69,8 @@ typedef struct _BaseStation
 extern BaseStation baseStation;
 
 void BaseStationInit();
-void BaseStationSetIp(IPv4Address ip);
+void BaseStationSetStaticIp(IPv4Address ip);
+void BaseStationEnableDhcp(uint8_t enable);
 void BaseStationSetPort(uint16_t port);
 void BaseStationSetVisionIp(IPv4Address ip);
 void BaseStationSetVisionPort(uint16_t port);

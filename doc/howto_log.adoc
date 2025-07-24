@@ -15,13 +15,13 @@ There are three methods available to log data on the robot. Each method has very
 | No
 | almost none
 
-| Console
+| Shell/CLI
 | Very slow
-| cli.c*
+| Tasks
 | Terminal
 | Low
 | No
-| basically printf
+| printf
 
 | SD Card
 | Good
@@ -63,28 +63,28 @@ You can adjust the number to your needs. The command will output the source file
 the message text itself, the code value, and a repitition counter. If the same messages is received multiple times with the same code, 
 no new message is stored but the repitition counter of the last message is simply increased and the timestamp updated.
   
-== Console
-The Console method is connected to the terminal as output. It offers printf-like functionality, which makes this function very versatile.
+== Shell
+The Shell method is connected to the terminal as output. It offers printf functionality, which makes this function very versatile.
 
-The call is `ConsolePrint("format string", parameterrs..)` and works exactly like printf (in fact, it uses snprintf under the hood).
+The call is `printf("format string", parameterrs..)`.
 
 This method is extremely slow, probably over a millisecond per output. Furthermore, data storage is the terminal. That also means that this data
 is lost if no terminal is open.
-The terminal subsystem has limited buffering capabilities. If you output too much data at once with repeated ConsolePrint calls the buffer
+The terminal subsystem has limited buffering capabilities. If you output too much data at once with repeated printf calls the buffer
 can fill up and data is lost. In such cases a thread sleep may be required to give the terminal time to output all buffered characters.
 
-ConsolePrint should only be called from within the cli.c file. And it should only be called on demand. Do not program periodic output via ConsolePrint. This will clutter the terminal and make it hard to use (you no longer see what you type).
+Only call printf on demand. Do not program periodic output via printf. This will clutter the terminal and make it hard to use (you no longer see what you type).
 
-Technically, ConsolePrint can be called from within any task which has a sufficiently large stack (4096 bytes minimum, 8192B recommended).
+Technically, printf can be called from within any task which has a sufficiently large stack (4096B minimum, 8192B recommended).
 This may be useful for development purposes, e.g. a poor man's data logging functionality. Nevertheless, such things will not be accepted on the
 master branch.
 
 === Network
-Analog to ConsolePrint, there is a `NetworkPrint(..)` method. It works the same from a development perspective, also the same limits apply, and some more!
+Analog to printf, there is a `NetworkPrint(..)` method. It works the same from a development perspective, also the same limits apply, and some more!
 
 Text used in NetworkPrint is transmitted from the Bot to the Base Station and from there to Sumatra. It appears in the Console view in the Bot Center.
 
-This method has an even lower bandwidth and buffering capability as ConsolePrint. Furthermore, it can saturate the wireless link, leading to dropped packets. This can have severe impact on our game performance. Be very careful where you use this function.
+This method has an even lower bandwidth and buffering capability as printf. Furthermore, it can saturate the wireless link, leading to dropped packets. This can have severe impact on our game performance. Be very careful where you use this function.
 
 == SD Card
 The SD Card on the robot is used for high-bandwidth persistent data storage. It is the perfect method to record real-time data and perform post analysis. It is extensively used by the robot's sensor fusion and control. Furthermore, it may also be used for detailed BotSkill analysis.
@@ -92,7 +92,7 @@ Data view and analysis required Matlab.
 
 The SD Card logging is the most complex log option, and it requires quite some work to setup capture of new data.
 
-TIP: SD Card logging may be unstable on v2019 robots if they are only powered via USB. Please use a battery or external power supply to provide enough power.
+TIP: SD Card logging may be unstable on v2020 robots if they are only powered via USB. Please use a battery or external power supply to provide enough power.
 
 === Message Definition
 

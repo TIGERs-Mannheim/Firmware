@@ -771,12 +771,6 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 		{
 			struct _robots *handle = &(handles.robots[id]);
 
-			if(!(pRobots[id].pVisionObj->isRecentlyDetected || pRobots[id].pRadioClient->isOnline))
-			{
-				gwinSetVisible(handle->hBot, false);
-				continue;
-			}
-
 			gwinSetVisible(handle->hBot, true);
 
 			if(pRobots[id].pVisionObj->isRecentlyDetected)
@@ -788,6 +782,7 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 
 			if(!pRobots[id].pRadioClient->isOnline)
 			{
+				gwinSetEnabled(handle->hId, FALSE);
 				gwinSetText(handle->hState, "Offline", FALSE);
 				gwinSetStyle(handle->hState, &DarkenedWidgetStyle);
 				gwinSetStyle(handle->hBatProg, &DarkenedWidgetStyle);
@@ -800,12 +795,12 @@ void RobotStatusUpdate(PresenterRobotInfo* pRobots, uint8_t visionAvailable)
 
 				continue;
 			}
-			else
-			{
-				gwinSetStyle(handle->hState, &BlackWidgetStyle);
-				gwinSetStyle(handle->hBatProg, &BlackWidgetStyle);
-				gwinSetStyle(handle->hKickerProg, &BlackWidgetStyle);
-			}
+
+			gwinSetEnabled(handle->hId, TRUE);
+
+			gwinSetStyle(handle->hState, &BlackWidgetStyle);
+			gwinSetStyle(handle->hBatProg, &BlackWidgetStyle);
+			gwinSetStyle(handle->hKickerProg, &BlackWidgetStyle);
 
 			IconsSetColor(handle->hBatIcon, Lime);
 			IconsSetColor(handle->hKickerIcon, Lime);

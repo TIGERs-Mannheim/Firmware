@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Robot Tigerflash" type="CMakeRunConfiguration" factoryName="Application" folderName="Develop" PROGRAM_PARAMS=" -a 0x08100000 -s 768 -d TigerBotV2020 -c -q -w $CMakeCurrentBuildDir$/src/main2019/main2019.bin" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$ProjectFileDir$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Firmware" TARGET_NAME="robot_v2020" CONFIG_NAME="Debug" RUN_PATH="$TIGERS_TIGERFLASH$/tigerflash">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      <option name="CMake.Explicit.Target" predefinedTargetName="copy_tigerflash" />
+    </method>
+  </configuration>
+</component>

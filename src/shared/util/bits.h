@@ -1,14 +1,9 @@
-/*
- * bits.h
- *
- *  Created on: 28.10.2015
- *      Author: AndreR
- */
+#pragma once
 
-#ifndef BITS_H_
-#define BITS_H_
+#include <stdint.h>
 
 #define BITS_CLEAR(reg, bit) (reg &= ~(bit))
 #define BITS_SET(reg, bit) (reg |= (bit))
 
-#endif /* BITS_H_ */
+void BitsPack(void* pDstV, uint32_t offset_bits, uint32_t width_bits, uint32_t value);
+uint32_t BitsUnpack(const void* pSrcV, uint32_t offset_bits, uint32_t width_bits);

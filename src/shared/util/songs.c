@@ -11,6 +11,10 @@ const BuzzerSequence buzzSeqDoubleBeepSlow = {
 		8, 0,
 };
 
+const BuzzerSequence buzzSeqShortLow = { (uint16_t[]){2000, 40}, 2, 1 };
+const BuzzerSequence buzzSeqShortMid = { (uint16_t[]){2250, 40}, 2, 1 };
+const BuzzerSequence buzzSeqShortHigh = { (uint16_t[]){2500, 40}, 2, 1 };
+
 const BuzzerSequence buzzSeqUp100 = {
 		(uint16_t[]){2300, 100, 2500, 100, 2700, 100},
 		6, 1,
@@ -792,6 +796,10 @@ const BuzzerSequence buzzSeqMacarena = {(uint16_t[]){
 	0, 975,
 }, 172, 1,};
 
+const BuzzerSequence buzzSeqImperial = { (uint16_t[]){
+	0, 238, 1568, 470, 0, 102, 1568, 470, 0, 102, 1568, 470, 0, 101, 1244, 326, 0, 98, 1864, 56, 0, 91, 1568, 471, 0, 101, 1244, 328, 0, 100, 1864, 54, 0, 84, 1568, 1043, 0, 106, 2348, 470, 0, 102, 2348, 470, 0, 101, 2348, 469, 0, 100, 2488, 328, 0, 105, 1864, 55, 0, 86, 1480, 470, 0, 104, 1244, 329, 0, 100, 1864, 55, 0, 83, 1568, 1041, 0, 100, 3136, 470, 0, 105, 1568, 328, 0, 103, 1568, 54, 0, 82, 3136, 498, 0, 72, 2960, 328, 0, 107, 2792, 55, 0, 88, 2636, 55, 0, 88, 2488, 41, 0, 101, 2636, 84, 0, 491, 1660, 70, 0, 215, 2216, 497, 0, 73, 2092, 326, 0, 100, 1976, 55, 0, 88, 1864, 55, 0, 90, 1760, 40, 0, 103, 1864, 84, 0, 490, 1244, 70, 0, 211, 1480, 499, 0, 77, 1244, 327, 0, 95, 1568, 54, 0, 95, 1864, 470, 0, 97, 1568, 327, 0, 107, 1864, 56, 0, 87, 2348, 1041, 0, 98, 3136, 470, 0, 105, 1568, 326, 0, 104, 1568, 55, 0, 78, 3136, 500, 0, 80, 2960, 326, 0, 103, 2792, 54, 0, 90, 2636, 55, 0, 86, 2488, 43, 0, 92, 2636, 85, 0, 491, 1660, 70, 0, 210, 2217, 497, 0, 72, 2092, 328, 0, 91, 1975, 57, 0, 83, 1864, 54, 0, 88, 1760, 44, 0, 97, 1864, 85, 0, 483, 1244, 70, 0, 214, 1480, 498, 0, 70, 1244, 327, 0, 104, 1864, 58, 0, 86, 1568, 414, 0, 157, 1244, 328, 0, 93, 1864, 56, 0, 94, 1568, 1040,
+}, 264, 1};
+
 static const Song songList[] = {
 	{ BUZZ_BEEP_FAST, "beep", &buzzSeqBeepFast },
 	{ BUZZ_UP50, "up50", &buzzSeqUp50 },
@@ -802,12 +810,16 @@ static const Song songList[] = {
 	{ BUZZ_DOWN100, "down100", &buzzSeqDown100 },
 	{ BUZZ_DOWN50, "down50", &buzzSeqDown50 },
 	{ BUZZ_TADA, "tada", &buzzSeqTada },
+	{ BUZZ_SHORT_LOW, "low", &buzzSeqShortLow },
+	{ BUZZ_SHORT_MID, "mid", &buzzSeqShortMid },
+	{ BUZZ_SHORT_HIGH, "high", &buzzSeqShortHigh },
 	{ BUZZ_SONG_CANTINA, "cant", &buzzSeqCant },
 	{ BUZZ_SONG_FINAL, "final", &buzzSeqFinalShort },
 	{ BUZZ_SONG_TETRIS, "tetris", &buzzSeqTetris },
 	{ BUZZ_SONG_EYE_LEAD, "eye1", &buzzSeqEyeLead },
 	{ BUZZ_SONG_EYE_FOLLOW, "eye2", &buzzSeqEyeFollow },
 	{ BUZZ_SONG_MACARENA, "mac", &buzzSeqMacarena },
+	{ BUZZ_SONG_IMPERIAL, "imp", &buzzSeqImperial },
 };
 
 void SongsGetList(const Song** ppSongs, size_t* pNumSongs)

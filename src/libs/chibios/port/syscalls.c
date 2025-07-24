@@ -8,6 +8,8 @@
 
 #include "ch.h"
 
+#include <stdlib.h>
+
 SyscallWriteFunc syscallWriteFunc;
 
 #undef errno
@@ -25,9 +27,11 @@ int _write(int file, char *ptr, int len);
 
 void _exit(int status)
 {
-	(void)status;
+	static char reason[32];
+	strcpy(reason, "Exit, code: 0x");
+	itoa(status, reason+14, 16);
 
-	chSysHalt("exit called");
+	chSysHalt(reason);
 
 	while(1);
 }

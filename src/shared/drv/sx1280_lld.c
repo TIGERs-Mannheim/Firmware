@@ -1,28 +1,17 @@
 #include "sx1280_lld.h"
 #include "sx1280_def.h"
-#include "errors.h"
 #include "util/log.h"
 #include "hal/sys_time.h"
+#include "errors.h"
+
+#include <stdlib.h>
 #include <string.h>
+
+#pragma GCC push_options
+#pragma GCC optimize ("O2")
 
 static uint32_t prepareTxData(uint8_t* pTx, SX1280LLDCmd* pCmd);
 static void processRxData(const uint8_t* pRx, SX1280LLDCmd* pCmd);
-
-static uint32_t getDioPinMask(SX1280LLD* pSX, SX1280LLDDio dioMask)
-{
-	uint32_t pinMask = 0;
-
-	if(dioMask & SX1280LLD_DIO_1)
-		pinMask |= pSX->dioPinMasks[0];
-
-	if(dioMask & SX1280LLD_DIO_2)
-		pinMask |= pSX->dioPinMasks[1];
-
-	if(dioMask & SX1280LLD_DIO_3)
-		pinMask |= pSX->dioPinMasks[2];
-
-	return pinMask;
-}
 
 // This must be the highest IRQ level (preferably 0)
 void SX1280LLDHighPrioIRQ(SX1280LLD* pSX)
@@ -33,68 +22,62 @@ void SX1280LLDHighPrioIRQ(SX1280LLD* pSX)
 	{
 		if(pActiveCmd->state == SX1280LLD_CMD_STATE_QUEUED)
 		{
-			// Start a new command
-			uint32_t transferSize = prepareTxData(pSX->pTx, pActiveCmd);
-
-			pSX->tCmdTransferStart_us = SysTimeUSec();
 			pSX->cmdTimedOut = 0;
 			pSX->cmdDone = 0;
-			pActiveCmd->state = SX1280LLD_CMD_STATE_ACTIVE;
+			pSX->cmdReady = 0;
+			pActiveCmd->state = SX1280LLD_CMD_STATE_PENDING;
+			pSX->tCmdSetPending_us = SysTimeUSec();
 
-			if(pActiveCmd->cmd == CMD_TIMED_IDLE)
+			if(pActiveCmd->timeout_us == 0)
 			{
-				TimerSimpleStartPulse(pSX->pTimer1us, pActiveCmd->timeout_us);
+				LogErrorC("Cmd timeout == 0", pActiveCmd->cmd);
 			}
-			else if(pActiveCmd->cmd == CMD_CLEAR_PENDING_DIO)
+
+			TimerSimpleStartPulse(pSX->pTimer1us, pActiveCmd->timeout_us);
+
+			// If busy pin is low we can continue directly. Otherwise, wait for busy pin low IRQ.
+			if(GPIOPinRead(pSX->busyPin) == 0)
 			{
-				pSX->tCmdEnd_us = pSX->tCmdTransferStart_us;
+				pSX->cmdReady = 1;
+			}
+		}
 
-				uint32_t pinMask = getDioPinMask(pSX, pActiveCmd->clearDio.mask);
+		if(pActiveCmd->state == SX1280LLD_CMD_STATE_PENDING)
+		{
+			pSX->tCmdTransferStart_us = SysTimeUSec();
 
-#ifdef STM32H7XX
-				EXTI_D1->PR1 = pinMask; // clear pending bits
-#else
-				EXTI->PR = pinMask; // clear pending bits
-#endif
-
-				pActiveCmd->result = SX1280LLD_CMD_RESULT_OK;
+			if(pSX->cmdTimedOut)
+			{
+				pActiveCmd->result = SX1280LLD_CMD_RESULT_TIMEOUT;
 				pActiveCmd->state = SX1280LLD_CMD_STATE_DONE;
+				pSX->tCmdTransferEnd_us = pSX->tCmdTransferStart_us;
 			}
-			else if(pActiveCmd->cmd == CMD_WAIT_DIO)
+			else if(pSX->cmdReady)
 			{
-				uint32_t pinMask = getDioPinMask(pSX, pActiveCmd->waitDio.mask);
-
-#ifdef STM32H7XX
-				EXTI_D1->IMR1 |= pinMask; // Enable pin edge IRQs
-#else
-				EXTI->IMR |= pinMask; // Enable pin edge IRQs
-#endif
-
-				TimerSimpleStartPulse(pSX->pTimer1us, pActiveCmd->timeout_us);
-			}
-			else
-			{
-				int16_t result = SPILLDStartTransferSelect(pSX->pSpi, pSX->csPin, transferSize);
-				if(result)
+				if(pActiveCmd->cmd == CMD_TIMED_IDLE)
 				{
-					LogErrorC("SPILLDStartTransfer failed", result | ((uint32_t)pSX->pTx[0] << 16));
-					pSX->tCmdEnd_us = SysTimeUSec();
-					pActiveCmd->result = SX1280LLD_CMD_RESULT_FAIL;
-					pActiveCmd->state = SX1280LLD_CMD_STATE_DONE;
+					pActiveCmd->state = SX1280LLD_CMD_STATE_ACTIVE;
+				}
+				else if(pActiveCmd->cmd == CMD_WAIT_DIO)
+				{
+					pActiveCmd->state = SX1280LLD_CMD_STATE_ACTIVE;
+					pSX->tCmdTransferEnd_us = pSX->tCmdTransferStart_us;
 				}
 				else
 				{
-#ifdef STM32H7XX
-					EXTI_D1->PR1 = pSX->busyPinMask; // clear busy pending bit (might be set by spurious falling edge)
-					EXTI_D1->IMR1 |= pSX->busyPinMask; // Enable busy pin edge IRQ
-#else
-					EXTI->PR = pSX->busyPinMask; // clear busy pending bit (might be set by spurious falling edge)
-					EXTI->IMR |= pSX->busyPinMask; // Enable busy pin edge IRQ
-#endif
-
-					TimerSimpleStartPulse(pSX->pTimer1us, pActiveCmd->timeout_us);
+					uint32_t transferSize = prepareTxData(pSX->pTx, pActiveCmd);
+					int16_t result = SPILLDStartTransferSelect(pSX->pSpi, pSX->csPin, transferSize);
+					if(result)
+					{
+						LogErrorC("SPILLDStartTransfer failed", result | ((uint32_t)pSX->pTx[0] << 16));
+						pSX->tCmdTransferEnd_us = SysTimeUSec();
+						pActiveCmd->result = SX1280LLD_CMD_RESULT_FAIL;
+						pActiveCmd->state = SX1280LLD_CMD_STATE_DONE;
+						TimerSimpleStop(pSX->pTimer1us);
+					}
 
 					SPILLDStartTransferExec(pSX->pSpi);
+					pActiveCmd->state = SX1280LLD_CMD_STATE_ACTIVE;
 				}
 			}
 		}
@@ -115,28 +98,28 @@ void SX1280LLDHighPrioIRQ(SX1280LLD* pSX)
 				}
 				else
 				{
+					SPILLDAbortTransfer(pSX->pSpi);
 					pActiveCmd->result = SX1280LLD_CMD_RESULT_TIMEOUT;
 				}
 
+				pSX->tCmdTransferEnd_us = SysTimeUSec();
 				pActiveCmd->state = SX1280LLD_CMD_STATE_DONE;
 			}
 
 			pSX->cmdTimedOut = 0;
 			pSX->cmdDone = 0;
+			pSX->cmdReady = 0;
 		}
 
 		if(pActiveCmd->state == SX1280LLD_CMD_STATE_DONE)
 		{
-			uint32_t tCmdTransferEnd_us = pSX->pSpi->transferCompletionTime_us;
-
-			if(pActiveCmd->cmd == CMD_TIMED_IDLE || pActiveCmd->cmd == CMD_CLEAR_PENDING_DIO || pActiveCmd->cmd == CMD_WAIT_DIO || pActiveCmd->cmd == CMD_NOP)
-				tCmdTransferEnd_us = pSX->tCmdTransferStart_us;
-			else
+			uint32_t isCmdWithoutTransfer = pActiveCmd->cmd == CMD_TIMED_IDLE || pActiveCmd->cmd == CMD_WAIT_DIO || pActiveCmd->cmd == CMD_NOP;
+			if(!isCmdWithoutTransfer && pActiveCmd->result != SX1280LLD_CMD_RESULT_FAIL)
 				pSX->lastStatus = pSX->pRx[0];
 
-			pActiveCmd->timeQueued_us = pSX->tCmdTransferStart_us - pActiveCmd->tQueued_us;
-			pActiveCmd->timeTransfer_us = tCmdTransferEnd_us - pSX->tCmdTransferStart_us;
-			pActiveCmd->timeBusy_us = pSX->tCmdEnd_us - tCmdTransferEnd_us;
+			pActiveCmd->timeQueued_us = pSX->tCmdSetPending_us - pActiveCmd->tQueued_us;
+			pActiveCmd->timePending_us = pSX->tCmdTransferStart_us - pSX->tCmdSetPending_us;
+			pActiveCmd->timeTransfer_us = pSX->tCmdTransferEnd_us - pSX->tCmdTransferStart_us;
 
 			if(pActiveCmd->pTrace)
 			{
@@ -145,8 +128,8 @@ void SX1280LLDHighPrioIRQ(SX1280LLD* pSX)
 				pTrace->result = pActiveCmd->result;
 				pTrace->tQueued_us = pActiveCmd->tQueued_us;
 				pTrace->timeQueued_us = pActiveCmd->timeQueued_us;
+				pTrace->timePending_us = pActiveCmd->timePending_us;
 				pTrace->timeTransfer_us = pActiveCmd->timeTransfer_us;
-				pTrace->timeBusy_us = pActiveCmd->timeBusy_us;
 			}
 
 			processRxData(pSX->pRx, pActiveCmd);
@@ -165,51 +148,53 @@ void SX1280LLDHighPrioIRQ(SX1280LLD* pSX)
 
 static void timerTriggeredIRQ(void* pUser)
 {
-	SX1280LLD* pSX = (SX1280LLD*)pUser;
-	pSX->tCmdEnd_us = SysTimeUSec();
+	SX1280LLD* pSX = pUser;
 	pSX->cmdTimedOut = 1;
 	NVIC_SetPendingIRQ(pSX->highPrioIRQn);
 }
 
-void SX1280LLDBusyIRQ(SX1280LLD* pSX)
+static void spiDoneIRQ(void* pUser)
 {
-	SX1280LLDCmd* pActiveCmd = pSX->pActiveCmd;
-
-	if(!pActiveCmd || pActiveCmd->state != SX1280LLD_CMD_STATE_ACTIVE || pActiveCmd->cmd == CMD_WAIT_DIO || SPILLDIsTransferActive(pSX->pSpi))
-	{
-		return; // This was a spurious busy IRQ due to RX/TX/FS mode changes
-	}
-
-#ifdef STM32H7XX
-	EXTI_D1->IMR1 &= ~pSX->busyPinMask; // disable busy pin detection again
-#else
-	EXTI->IMR &= ~pSX->busyPinMask; // disable busy pin detection again
-#endif
-
-	pSX->tCmdEnd_us = SysTimeUSec();
+	SX1280LLD* pSX = pUser;
+	pSX->tCmdTransferEnd_us = pSX->pSpi->transferCompletionTime_us;
 	pSX->cmdDone = 1;
 	NVIC_SetPendingIRQ(pSX->highPrioIRQn);
 }
 
-void SX1280LLDDioIRQ(SX1280LLD* pSX)
+// Triggered on BUSY falling edge
+void SX1280LLDBusyIRQ(SX1280LLD* pSX)
+{
+	SX1280LLDCmd* pActiveCmd = pSX->pActiveCmd;
+
+	if(!pActiveCmd || pActiveCmd->state != SX1280LLD_CMD_STATE_PENDING)
+	{
+		return; // This was a spurious busy IRQ due to RX/TX/FS mode changes
+	}
+
+	if(GPIOPinRead(pSX->busyPin))
+	{
+		return; // SX1280 is busy (again), wait for next IRQ
+	}
+
+	pSX->cmdReady = 1;
+	NVIC_SetPendingIRQ(pSX->highPrioIRQn);
+}
+
+// Triggered on DIO rising edge
+void SX1280LLDDioIRQ(SX1280LLD* pSX, SX1280LLDDio dio)
 {
 	SX1280LLDCmd* pActiveCmd = pSX->pActiveCmd;
 
 	if(!pActiveCmd || pActiveCmd->state != SX1280LLD_CMD_STATE_ACTIVE || pActiveCmd->cmd != CMD_WAIT_DIO)
 	{
-		LogError("Spurious data IRQ");
+		LogErrorC("Spurious data IRQ", pActiveCmd ? (pActiveCmd->state<<8 | pActiveCmd->cmd) : 0);
 		return;
 	}
 
-	uint32_t allPinMask = getDioPinMask(pSX, SX1280LLD_DIO_ALL);
+	if((dio & pActiveCmd->waitDio.mask) == 0)
+		return;
 
-#ifdef STM32H7XX
-	EXTI_D1->IMR1 &= ~allPinMask; // disable data pin detection again
-#else
-	EXTI->IMR &= ~allPinMask; // disable data pin detection again
-#endif
-
-	pSX->tCmdEnd_us = SysTimeUSec();
+	pSX->tCmdTransferEnd_us = SysTimeUSec();
 	pSX->cmdDone = 1;
 	NVIC_SetPendingIRQ(pSX->highPrioIRQn);
 }
@@ -217,12 +202,13 @@ void SX1280LLDDioIRQ(SX1280LLD* pSX)
 void SX1280LLDInit(SX1280LLD* pSX, SX1280LLDData* pData)
 {
 	pSX->pSpi = pData->pSpi;
+	pSX->busyPin = pData->busyPin;
 
 	pSX->pTx = SPILLDGetTxBuf(pSX->pSpi);
 	pSX->pRx = SPILLDGetRxBuf(pSX->pSpi);
 
 	if(pSX->pSpi->data.dmaBufSize < 280)
-		while(1); // Not enough memory
+		exit(ERROR_SX1280_DMA_BUF_TOO_SMALL);
 
 	pSX->pTimer1us = pData->pTimer1us;
 	pSX->pTimer1us->pCallback = &timerTriggeredIRQ;
@@ -249,28 +235,13 @@ void SX1280LLDInit(SX1280LLD* pSX, SX1280LLDData* pData)
 		{
 			GPIOInit(pData->dioPins[i].pPort, pData->dioPins[i].pin, &gpioInit);
 			pSX->dioPinMasks[i] = pData->dioPins[i].pin;
-
-#ifdef STM32H7XX
-			EXTI_D1->IMR1 &= ~pSX->dioPinMasks[i]; // mask ISR for now, will be activated on demand
-			EXTI_D1->PR1 = pSX->dioPinMasks[i];
-#else
-			EXTI->IMR &= ~pSX->dioPinMasks[i]; // mask ISR for now, will be activated on demand
-			EXTI->PR = pSX->dioPinMasks[i];
-#endif
 		}
 	}
 
-
-#ifdef STM32H7XX
-	EXTI_D1->IMR1 &= ~pSX->busyPinMask; // mask ISR for now, will be activated on demand
-	EXTI_D1->PR1 = pSX->busyPinMask;
-#else
-	EXTI->IMR &= ~pSX->busyPinMask; // mask ISR for now, will be activated on demand
-	EXTI->PR = pSX->busyPinMask;
-#endif
-
 	SPILLDConfigureCsPin(pData->csPin);
 	SPILLDReconfigure(pSX->pSpi, pData->prescaler, 0, 0);
+	pSX->pSpi->doneCallback = &spiDoneIRQ;
+	pSX->pSpi->pCallbackData = pSX;
 }
 
 void SX1280LLDEnqueueCmd(SX1280LLD* pSX, SX1280LLDCmd* pCmd)
@@ -544,3 +515,5 @@ void SX1280LLDParsePacketStatus(const SX1280LLDCmdGetPacketStatus* pCmd, uint8_t
 		default: break;
 	}
 }
+
+#pragma GCC pop_options

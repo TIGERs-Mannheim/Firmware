@@ -329,6 +329,10 @@ void RobotImplUpdateAuxData(RobotAuxData* pAux)
 
 	// kicker
 	pAux->kicker.maxLevel = tigerBot.kicker.pConfig->maxVoltage_V;
+	pAux->kicker.lastKick.kickDevice = tigerBot.lastKickState.kickDevice;
+	pAux->kicker.lastKick.kickDuration_s = tigerBot.lastKickState.kickDuration_s;
+	pAux->kicker.lastKick.dribblerVel_mDs = tigerBot.lastKickState.dribblerVel_mDs;
+	pAux->kicker.lastKick.dribblerForce_N = tigerBot.lastKickState.dribblerForce_N;
 
 	// physical
 	pAux->physical.v2016 = 0;
@@ -502,11 +506,6 @@ void RobotImplSetLEDs(uint8_t state)
 			LEDRGBWSet(&devLedFrontRight, 0, 0, 0.1f, 0);
 			break;
 	}
-}
-
-int16_t RobotImplExtSendPacket(PacketHeader* pHeader, const void* _pData, uint16_t dataLength)
-{
-	return MpuExtSendPacket(&devRaspberryPi, pHeader, _pData, dataLength);
 }
 
 void RobotImplSetEnabledDetectors(uint32_t detectors)

@@ -1,25 +1,27 @@
 #include "udp_socket.h"
 #include "hal/rng.h"
 
-void UDPSocketOpen(UDPSocket* pSocket, NetIf* pInterface, uint16_t myPort, IPv4Address bindIp)
+#include <errors.h>
+
+void UDPSocketOpen(UDPSocket* pSocket, NetIf* pInterface, uint16_t myPort)
 {
 	pSocket->pIf = pInterface;
-	pSocket->bindIp = bindIp;
+	pSocket->multicastIp.u32 = 0;
 
 	while(myPort == 0)
 	{
 		myPort = (RNGGetRandomU32() % 16384) + 49152;
 
-		UDPSocket* pSocket = ListFront(pInterface->udpSockets);
-		while(pSocket)
+		UDPSocket* pSocketSearch = ListFront(pInterface->udpSockets);
+		while(pSocketSearch)
 		{
-			if(pSocket->port == myPort)
+			if(pSocketSearch->port == myPort)
 			{
 				myPort = 0;
 				break;
 			}
 
-			pSocket = pSocket->pNext;
+			pSocketSearch = pSocketSearch->pNext;
 		}
 	}
 
@@ -28,23 +30,17 @@ void UDPSocketOpen(UDPSocket* pSocket, NetIf* pInterface, uint16_t myPort, IPv4A
 	chEvtObjectInit(&pSocket->eventSource);
 
 	ListPushBack(&pInterface->udpSockets, pSocket);
-
-	if(IPv4IsMulticastAddress(bindIp))
-		IGMPJoinGroup(&pInterface->igmp, bindIp);
 }
 
-void UDPSocketSetBindIp(UDPSocket* pSocket, IPv4Address ip)
+void UDPSocketSetMulticastGroup(UDPSocket* pSocket, IPv4Address multicastIp)
 {
-	if(ip.u32 == pSocket->bindIp.u32)
-		return;
+	if(IPv4IsMulticastAddress(pSocket->multicastIp))
+		IGMPLeaveGroup(&pSocket->pIf->igmp, pSocket->multicastIp);
 
-	if(IPv4IsMulticastAddress(pSocket->bindIp))
-		IGMPLeaveGroup(&pSocket->pIf->igmp, pSocket->bindIp);
+	if(IPv4IsMulticastAddress(multicastIp))
+		IGMPJoinGroup(&pSocket->pIf->igmp, multicastIp);
 
-	if(IPv4IsMulticastAddress(ip))
-		IGMPJoinGroup(&pSocket->pIf->igmp, ip);
-
-	pSocket->bindIp = ip;
+	pSocket->multicastIp = multicastIp;
 }
 
 void UDPSocketClose(UDPSocket* pSocket)
@@ -57,8 +53,7 @@ void UDPSocketClose(UDPSocket* pSocket)
 		pPkt = pPkt->pNext;
 	}
 
-	if(IPv4IsMulticastAddress(pSocket->bindIp))
-		IGMPLeaveGroup(&pSocket->pIf->igmp, pSocket->bindIp);
+	UDPSocketSetMulticastGroup(pSocket, IPV4_ADDRESS_ZEROS);
 
 	ListErase(&pSocket->pIf->udpSockets, pSocket);
 }
@@ -78,6 +73,9 @@ NetPkt* UDPSocketAlloc(UDPSocket* pSocket, IPv4Address dstIp, uint16_t dstPort)
 
 int16_t UDPSocketSend(UDPSocket* pSocket, NetPkt* pPkt)
 {
+	if(pSocket->pIf->state != NET_IF_STATE_CONNECTED)
+		return ERROR_RESSOURCE_UNAVAILABLE;
+
 	pPkt->udp.srcPort = pSocket->port;
 
 	return UDPSend(&pSocket->pIf->udp, pPkt);

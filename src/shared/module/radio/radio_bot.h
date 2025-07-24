@@ -7,15 +7,20 @@
 #include "log_msgs.h"
 #include "ch.h"
 
-#define RADIO_BOT_EVENT_PACKET_RECEIVED		EVENT_MASK(0)
-#define RADIO_BOT_EVENT_PACKET_TRANSMITTED	EVENT_MASK(1)
+#define RADIO_BOT_EVENT_PACKET_RECEIVED_FROM_BASE		EVENT_MASK(0)
+#define RADIO_BOT_EVENT_PACKET_RECEIVED_FROM_BOT		EVENT_MASK(1)
+#define RADIO_BOT_EVENT_PACKET_TRANSMITTED				EVENT_MASK(2)
+#define RADIO_BOT_EVENT_SCAN_COMPLETE					EVENT_MASK(3)
 
 typedef struct _RadioClientRx
 {
 	RadioBuffer buf;
 
-	uint8_t expectedToggleBit;
-	uint32_t rxPacketsLost;	// identified by incorrect toggle bits
+	uint8_t expectedSeq;
+	uint32_t rxPacketsLost;	// identified by gaps in sequence number
+
+	uint8_t lastRxSeqLoss;
+	uint32_t txPacketsLost;
 
 	uint32_t lastReceivedTime_us;
 	int32_t avgRxRssi_mdBm;
@@ -33,7 +38,10 @@ typedef struct _RadioBotStats
 	volatile uint8_t isBaseOnline;
 	volatile uint32_t baseTimeouts;
 	volatile uint32_t baseCycleTime_us;
-	volatile uint32_t rxInvalidHeader;
+	volatile uint32_t rxCrcError;
+	volatile uint32_t rxSyncError;
+	volatile uint32_t rxPacketsGood;
+	volatile int32_t lastReceivedRssiFromBaseStation_mdBm;
 } RadioBotStats;
 
 typedef struct _RadioBotData
@@ -56,10 +64,15 @@ typedef struct _RadioBot
 
 	RadioMode mode;
 	uint8_t isTxRequested;
-	uint8_t headerToggleBit;
+	uint8_t nextSeqNumber;
 	uint32_t lastBaseReceivedTime_us;
 	uint32_t lastAddressedTime_us;
-	volatile uint32_t newFrequency;
+	volatile uint8_t activeChannel;
+	volatile uint32_t newChannel;
+
+	volatile uint8_t startScan;
+	volatile uint8_t isScanning;
+	volatile uint8_t lastScanChannel;
 
 	RadioBotStats stats;
 
@@ -73,6 +86,8 @@ void RadioBotInit(RadioBot* pBot, RadioBotData* pInit);
 void RadioBotLowPrioIRQ(RadioBot* pRadio);
 void RadioBotSetMode(RadioBot* pRadio, RadioMode mode);
 void RadioBotSetChannel(RadioBot* pRadio, uint8_t channel);
+void RadioBotStartScan(RadioBot* pRadio, uint8_t lastChannel);
+uint8_t RadioBotIsScanComplete(RadioBot* pRadio);
 int16_t RadioBotSetBotId(RadioBot* pRadio, uint8_t botId);
 uint8_t RadioBotIsTxEmpty(RadioBot* pRadio);
 int16_t RadioBotSendPacket(RadioBot* pRadio, const uint8_t* pData, uint32_t dataSize);

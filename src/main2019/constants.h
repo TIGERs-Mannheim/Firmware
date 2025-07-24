@@ -5,6 +5,7 @@
 /////////////////////////////////////////////////
 // Task Priorities
 /////////////////////////////////////////////////
+#define TASK_PRIO_NETWORK		(NORMALPRIO + 50)
 #define TASK_PRIO_KICKER		(NORMALPRIO + 40)
 #define TASK_PRIO_ADC_KICKER	(NORMALPRIO + 30)
 #define TASK_PRIO_IMU			(NORMALPRIO + 20)
@@ -28,10 +29,10 @@
 // IRQ Levels
 /////////////////////////////////////////////////
 
-#define IRQL_WIFI_HIGH_PRIO	0
+#define IRQL_WIFI_TIMEOUT	0
 #define IRQL_WIFI_SPI_DONE	1
-#define IRQL_WIFI_PIN		2
-#define IRQL_WIFI_TIMEOUT	3
+#define IRQL_WIFI_HIGH_PRIO	2
+#define IRQL_WIFI_PIN		3
 
 #define IRQL_WIFI_LOW_PRIO	5
 

@@ -27,28 +27,15 @@ static uint8_t dischargeKicker()
 	return 1;
 }
 
-static void doReasoningOnKicker(TestResultKicker* pResult)
+static uint8_t getReasoning(float value, float expectedValue, float okTolerance, float warningTolerance)
 {
-	if(pResult->chargingSpeed < 15.0f)
-		pResult->reasoning.charge = TEST_REASONING_RESULT_BAD;
-	else if(pResult->chargingSpeed < 30.0f || pResult->chargingSpeed > 70.0f)
-		pResult->reasoning.charge = TEST_REASONING_RESULT_WARNING;
-	else
-		pResult->reasoning.charge = TEST_REASONING_RESULT_OK;
+	if(value < expectedValue-warningTolerance || value > expectedValue+warningTolerance)
+		return TEST_REASONING_RESULT_BAD;
 
-	if(pResult->straightVoltageDrop < 5.0f)
-		pResult->reasoning.straight = TEST_REASONING_RESULT_BAD;
-	else if(pResult->straightVoltageDrop < 10.0f || pResult->straightVoltageDrop > 30.0f)
-		pResult->reasoning.straight = TEST_REASONING_RESULT_WARNING;
-	else
-		pResult->reasoning.straight = TEST_REASONING_RESULT_OK;
+	if(value < expectedValue-okTolerance || value > expectedValue+okTolerance)
+		return TEST_REASONING_RESULT_WARNING;
 
-	if(pResult->chipVoltageDrop < 5.0f)
-		pResult->reasoning.chip = TEST_REASONING_RESULT_BAD;
-	else if(pResult->chipVoltageDrop < 10.0f || pResult->chipVoltageDrop > 30.0f)
-		pResult->reasoning.chip = TEST_REASONING_RESULT_WARNING;
-	else
-		pResult->reasoning.chip = TEST_REASONING_RESULT_OK;
+	return TEST_REASONING_RESULT_OK;
 }
 
 static void testKicker(Test* pTest)
@@ -123,7 +110,9 @@ static void testKicker(Test* pTest)
 
 	TestModeExit();
 
-	doReasoningOnKicker(pResult);
+	pResult->reasoning.charge = getReasoning(pResult->chargingSpeed, 120.0f, 15.0f, 30.0f);
+	pResult->reasoning.straight = getReasoning(pResult->straightVoltageDrop, 16.0f, 5.0f, 10.0f);
+	pResult->reasoning.chip = getReasoning(pResult->chipVoltageDrop, 12.0f, 5.0f, 10.0f);
 }
 
 SHELL_CMD(kicker, "Test kicker (charge, straight kick, chip kick)");

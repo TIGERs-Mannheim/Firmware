@@ -59,7 +59,7 @@ static void fastPosRun(const SkillInput* pInput, SkillOutput* pOutput)
 {
 	FastPosInput* pPos = (FastPosInput*)pInput->pData;
 
-	SkillBasicsParseKDInput(pInput, &pPos->kd, pOutput);
+	SkillBasicsParseKDInput(&pPos->kd, pOutput);
 
 	if(pPos->velMaxXY == 0)
 		pPos->velMaxXY = 1;

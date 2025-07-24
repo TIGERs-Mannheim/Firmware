@@ -122,6 +122,7 @@ typedef enum _SX1280LLDCmdState
 {
 	SX1280LLD_CMD_STATE_DETACHED,
 	SX1280LLD_CMD_STATE_QUEUED,
+	SX1280LLD_CMD_STATE_PENDING,
 	SX1280LLD_CMD_STATE_ACTIVE,
 	SX1280LLD_CMD_STATE_DONE,
 } SX1280LLDCmdState;
@@ -204,8 +205,8 @@ typedef struct _SX1280LLDCmdTrace
 	SX1280LLDCmdResult result;
 	uint32_t tQueued_us;
 	uint32_t timeQueued_us;
+	uint32_t timePending_us;
 	uint32_t timeTransfer_us;
-	uint32_t timeBusy_us;
 } SX1280LLDCmdTrace;
 
 typedef struct _SX1280LLDCmd
@@ -238,7 +239,6 @@ typedef struct _SX1280LLDCmd
 		SX1280LLDCmdClearIrqStatus clearIrqStatus;
 		SX1280LLDCmdSetAutoFs setAutoFs;
 		SX1280LLDCmdSetLongPreamble setLongPreamble;
-		SX1280LLDCmdClearDio clearDio;
 		SX1280LLDCmdWaitDio waitDio;
 	};
 
@@ -248,9 +248,9 @@ typedef struct _SX1280LLDCmd
 
 	uint32_t tQueued_us;
 
-	uint32_t timeQueued_us; // Time from QUEUED to ACTIVE
+	uint32_t timeQueued_us; // Time from QUEUED to PENDING
+	uint32_t timePending_us; // Time from PENDING to ACTIVE
 	uint32_t timeTransfer_us; // SPI transfer time
-	uint32_t timeBusy_us; // Time from transfer complete to busy pin low or timeout
 
 	SX1280LLDCmdTrace* volatile pTrace;
 } SX1280LLDCmd;
@@ -266,17 +266,21 @@ typedef struct _SX1280LLD
     uint32_t busyPinMask;
     uint32_t dioPinMasks[3];
 
+	GPIOPin busyPin;
+
     TimerSimpleLLD* pTimer1us;
 
     IRQn_Type highPrioIRQn;
 
     uint8_t lastStatus;
 
-	volatile uint32_t tCmdTransferStart_us;
-	volatile uint32_t tCmdEnd_us;
+	uint32_t tCmdSetPending_us;
+	uint32_t tCmdTransferStart_us;
+	volatile uint32_t tCmdTransferEnd_us;
 
     volatile uint8_t cmdTimedOut;
     volatile uint8_t cmdDone;
+	volatile uint8_t cmdReady;
 
     SX1280LLDCmd* volatile pActiveCmd;
 
@@ -303,7 +307,7 @@ typedef struct _SX1280LLDData
 void SX1280LLDInit(SX1280LLD* pSX, SX1280LLDData* pData);
 void SX1280LLDHighPrioIRQ(SX1280LLD* pSX);
 void SX1280LLDBusyIRQ(SX1280LLD* pSX);
-void SX1280LLDDioIRQ(SX1280LLD* pSX);
+void SX1280LLDDioIRQ(SX1280LLD* pSX, SX1280LLDDio dio);
 void SX1280LLDEnqueueCmd(SX1280LLD* pSX, SX1280LLDCmd* pCmd);
 uint8_t SX1280LLDIsCmdDone(SX1280LLDCmd* pCmd);
 const char* SX1280LLDGetCmdName(uint8_t cmd);
