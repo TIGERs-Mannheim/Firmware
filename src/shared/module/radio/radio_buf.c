@@ -87,6 +87,8 @@ uint32_t RadioBufPutRxAirPacket(RadioBuffer* pRxBuf, const uint8_t* pData, size_
 		payloadLeft -= copySize;
 		pData += copySize;
 
+		pRxBuf->stats.rxBytesTotal += copySize;
+
 		if(delimiterFound)
 		{
 			if(pBuf->dataSize <= 1)

@@ -204,35 +204,59 @@ static void baseStationTask(void*)
 			bsEthStats.txFrames = ethStats.txFramesProcessed;
 			bsEthStats.txBytes = ethStats.txBytesProcessed;
 			bsEthStats.rxFramesDmaOverrun = ethStats.rxMissedCtrl;
-			bsEthStats.ntpSync = 0; // TODO: delete, time comes from Sumatra
 
 			BaseStationSendSumatraPacket(&header, &bsEthStats, sizeof(BaseStationEthStats));
 
 			// Gather WIFI stats
-			BaseStationWifiStats wifiStats; // TODO: replace this struct, most fields are unused
+			BaseStationWifiStatsV2 wifiStats;
 			memset(&wifiStats, 0, sizeof(wifiStats));
 
-			wifiStats.updateRate = 1000000/baseStation.radioBase.stats.cycleDuration_us;
+			wifiStats.module.cycleDuration_us = baseStation.radioBase.stats.cycleDuration_us;
+			wifiStats.module.numTimeslotsUsed = baseStation.radioBase.stats.timeslotsUsed;
+			wifiStats.module.rxCrcErrors = baseStation.radioBase.stats.rxCrcError;
+			wifiStats.module.rxFromOtherBase = baseStation.radioBase.stats.rxFromOtherBase;
+			wifiStats.module.rxPacketsGood = baseStation.radioBase.stats.rxPacketsGood;
+			wifiStats.module.rxSyncErrors = baseStation.radioBase.stats.rxSyncError;
+
+			const uint8_t numBotsMax = sizeof(wifiStats.bots)/sizeof(wifiStats.bots[0]);
 
 			uint8_t slotsUsed = 0;
 			for(uint8_t i = 0; i < RADIO_NUM_ROBOT_CLIENTS; i++)
 			{
-				RadioClientRx* pClient = &baseStation.radioBase.baseIn[i];
-				if(!pClient->isOnline)
+				const RadioClientRx* pClientRx = &baseStation.radioBase.baseIn[i];
+				if(!pClientRx->isOnline)
 					continue;
 
+				const RadioClientTx* pClientTx = &baseStation.radioBase.baseOut[i];
+
 				wifiStats.bots[slotsUsed].botId = i;
-				wifiStats.bots[slotsUsed].bsRssi = pClient->avgRxRssi_mdBm/100;
-				wifiStats.bots[slotsUsed].botRssi = wifiStats.bots[slotsUsed].bsRssi;
+				wifiStats.bots[slotsUsed].ota.rxRssi = pClientRx->avgRxRssi_mdBm/100;
+				wifiStats.bots[slotsUsed].ota.rxPacketsLost = pClientRx->rxPacketsLost;
+				wifiStats.bots[slotsUsed].ota.txPacketsLost = pClientRx->txPacketsLost;
+
+				const RadioBufferStats* pBufRx = &pClientRx->buf.stats;
+				const RadioBufferStats* pBufTx = &pClientTx->buf.stats;
+
+				wifiStats.bots[slotsUsed].buf.rxPacketsTotal = pBufRx->rxPacketsTotal;
+				wifiStats.bots[slotsUsed].buf.rxBytesTotal = pBufRx->rxBytesTotal;
+				wifiStats.bots[slotsUsed].buf.rxBufferOverruns = pBufRx->rxBufferOverruns;
+				wifiStats.bots[slotsUsed].buf.rxBufferDataOverflows = pBufRx->rxBufferDataOverflows;
+				wifiStats.bots[slotsUsed].buf.rxCobsDecodingErrors = pBufRx->rxCobsDecodingErrors;
+				wifiStats.bots[slotsUsed].buf.rxCrcErrors = pBufRx->rxCrcErrors;
+				wifiStats.bots[slotsUsed].buf.txPacketsTotal = pBufTx->txPacketsTotal;
+				wifiStats.bots[slotsUsed].buf.txBytesTotal = pBufTx->txBytesTotal;
+				wifiStats.bots[slotsUsed].buf.txBufferUnderrun = pBufTx->txBufferUnderrun;
 
 				slotsUsed++;
+				if(slotsUsed >= numBotsMax)
+					break;
 			}
 
-			for(uint8_t slot = slotsUsed; slot < RADIO_NUM_ROBOT_CLIENTS; slot++)
+			for(uint8_t slot = slotsUsed; slot < numBotsMax; slot++)
 				wifiStats.bots[slot].botId = 0xFF;
 
-			header.cmd = CMD_BASE_STATION_WIFI_STATS;
-			BaseStationSendSumatraPacket(&header, &wifiStats, sizeof(BaseStationWifiStats));
+			header.cmd = CMD_BASE_STATION_WIFI_STATS_V2;
+			BaseStationSendSumatraPacket(&header, &wifiStats, sizeof(BaseStationWifiStatsV2));
 		}
 	}
 }

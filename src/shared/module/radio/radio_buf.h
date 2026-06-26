@@ -7,6 +7,7 @@
 typedef struct _RadioBufferStats
 {
 	uint32_t rxPacketsTotal;
+	uint32_t rxBytesTotal; // Used over-the-air bytes (excl. zero filling)
 	uint32_t rxBufferOverruns; // Lost packets due to unavailable RadioBufferEntry owned by radio to put application packet
 	uint32_t rxBufferDataOverflows; // Received data exceeds array size
 	uint32_t rxCobsDecodingErrors;
@@ -14,9 +15,9 @@ typedef struct _RadioBufferStats
 	uint32_t txBufferUnderrun; // No free TX buffer entry when attempting to enqueue application packet
 	uint32_t rxAppBytes; // Application packet bytes processed after decoding
 	uint32_t rxBytesGood; // Received bytes which are successfully decoded to application packets
-	uint32_t rxBytesDiscarded;	// Bytes received but dropped due to packet loss, COBS decoding errors, or no free buffer entry
+	uint32_t rxBytesDiscarded; // Bytes received but dropped due to packet loss, COBS decoding errors, or no free buffer entry
 	uint32_t txPacketsTotal;
-	uint32_t txBytesTotal;
+	uint32_t txBytesTotal; // Used over-the-air bytes (excl. zero filling)
 } RadioBufferStats;
 
 typedef struct _RadioBufferEntry

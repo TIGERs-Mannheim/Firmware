@@ -49,11 +49,11 @@ typedef struct PACKED _PacketHeaderEx
 #define CMD_BASE_STATION_ACOMMAND		0x60
 #define CMD_BASE_STATION_PING			0x61
 #define CMD_BASE_STATION_AUTH			0x62
-#define CMD_BASE_STATION_WIFI_STATS		0x63
 #define CMD_BASE_STATION_ETH_STATS		0x64
 #define CMD_BASE_STATION_CAM_VIEWPORT	0x65
 #define CMD_BASE_STATION_CONFIG_V3		0x66
 #define CMD_BASE_STATION_BROADCAST		0x67
+#define CMD_BASE_STATION_WIFI_STATS_V2	0x68
 
 // BOT COUNT
 #define CMD_BOT_COUNT_TOTAL 32
@@ -319,20 +319,44 @@ typedef struct PACKED _BaseStationConfigV3
 	uint8_t fixedRuntime;
 } BaseStationConfigV3;
 
-typedef struct PACKED _BaseStationWifiStats	// 624
+typedef struct PACKED _BaseStationWifiStatsV2	// 773
 {
 	struct PACKED _bot
 	{
+		struct PACKED _buf
+		{
+			uint32_t rxPacketsTotal; // all received packets, excl. packets lost on air
+			uint32_t rxBytesTotal; // Used over-the-air bytes (excl. zero filling)
+			uint32_t rxBufferOverruns; // Lost packets due to unavailable RadioBufferEntry owned by radio to put application packet
+			uint32_t rxBufferDataOverflows; // Received data exceeds array size
+			uint32_t rxCobsDecodingErrors;
+			uint32_t rxCrcErrors;
+			uint32_t txPacketsTotal; // all TX attempts, incl. packets not received by remote
+			uint32_t txBytesTotal; // Used over-the-air bytes (excl. zero filling)
+			uint32_t txBufferUnderrun; // No free TX buffer entry when attempting to enqueue application packet
+		} buf;
+
+		struct PACKED _ota
+		{
+			uint32_t rxPacketsLost;	// identified by gaps in sequence number
+			uint32_t txPacketsLost;
+
+			int16_t rxRssi; // [dBm*0.1]
+		} ota;
+
 		uint8_t botId;
+	} bots[16];
 
-		uint8_t queueStats[22];
-
-		int16_t botRssi; // [dBm*0.1]
-		int16_t bsRssi;  // [dBm*0.1]
-	} bots[32];
-
-	uint16_t updateRate;	// [Hz]
-} BaseStationWifiStats;
+	struct PACKED _module // Stats from SX1280 directly, not for a specific bot
+	{
+		uint32_t rxSyncErrors;
+		uint32_t rxCrcErrors;
+		uint32_t rxPacketsGood;
+		uint32_t rxFromOtherBase;
+		uint32_t cycleDuration_us;
+		uint8_t numTimeslotsUsed;
+	} module;
+} BaseStationWifiStatsV2;
 
 typedef struct PACKED _BaseStationEthStats
 {
@@ -343,8 +367,6 @@ typedef struct PACKED _BaseStationEthStats
 	uint32_t rxBytes;
 
 	uint16_t rxFramesDmaOverrun;
-
-	uint8_t ntpSync;
 } BaseStationEthStats;
 
 typedef struct PACKED _BaseStationCamViewport
